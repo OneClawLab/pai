@@ -101,7 +101,7 @@ This implementation plan breaks down the PAI CLI tool into discrete coding tasks
     - _Requirements: 9.2, 9.4, 9.6_
 
 - [ ] 7. Implement Tool Registry
-  - [ ] 7.1 Create ToolRegistry class
+  - [x] 7.1 Create ToolRegistry class
     - Implement register(), get(), getAll() methods
     - Implement execute() method for tool invocation
     - Register bash_exec tool in constructor
@@ -113,7 +113,7 @@ This implementation plan breaks down the PAI CLI tool into discrete coding tasks
     - _Requirements: 9.1_
 
 - [ ] 8. Implement LLM Client wrapper
-  - [ ] 8.1 Create LLMClient class wrapping pi-ai
+  - [x] 8.1 Create LLMClient class wrapping pi-ai
     - Initialize pi-ai client based on provider
     - Implement chat() method for streaming responses
     - Implement chatComplete() method for non-streaming
