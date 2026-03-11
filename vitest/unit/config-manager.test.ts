@@ -1,0 +1,375 @@
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { ConfigurationManager } from '../../src/config-manager.js';
+import { PAIError } from '../../src/types.js';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
+
+describe('ConfigurationManager', () => {
+  let tempDir: string;
+  let configPath: string;
+
+  beforeEach(async () => {
+    // Create temporary directory for tests
+    tempDir = await mkdtemp(join(tmpdir(), 'pai-test-'));
+    configPath = join(tempDir, 'config.json');
+  });
+
+  afterEach(async () => {
+    // Clean up temporary directory
+    await rm(tempDir, { recursive: true, force: true });
+  });
+
+  describe('loadConfig', () => {
+    it('should return default config when file does not exist', async () => {
+      const manager = new ConfigurationManager({ config: configPath });
+      const config = await manager.loadConfig();
+
+      expect(config).toHaveProperty('schema_version');
+      expect(config.providers).toEqual([]);
+    });
+
+    it('should load valid config file', async () => {
+      const testConfig = {
+        schema_version: '1.0.0',
+        defaultProvider: 'openai',
+        providers: [
+          {
+            name: 'openai',
+            apiKey: 'test-key',
+            models: ['gpt-4'],
+          },
+        ],
+      };
+
+      await writeFile(configPath, JSON.stringify(testConfig), 'utf-8');
+
+      const manager = new ConfigurationManager({ config: configPath });
+      const config = await manager.loadConfig();
+
+      expect(config).toEqual(testConfig);
+    });
+
+    it('should throw PAIError with exit code 4 for malformed JSON', async () => {
+      await writeFile(configPath, '{ invalid json }', 'utf-8');
+
+      const manager = new ConfigurationManager({ config: configPath });
+
+      await expect(manager.loadConfig()).rejects.toThrow(PAIError);
+      await expect(manager.loadConfig()).rejects.toMatchObject({
+        exitCode: 4,
+        message: expect.stringContaining('malformed'),
+      });
+    });
+
+    it('should throw PAIError with exit code 4 for missing schema_version', async () => {
+      await writeFile(
+        configPath,
+        JSON.stringify({ providers: [] }),
+        'utf-8'
+      );
+
+      const manager = new ConfigurationManager({ config: configPath });
+
+      await expect(manager.loadConfig()).rejects.toThrow(PAIError);
+      await expect(manager.loadConfig()).rejects.toMatchObject({
+        exitCode: 4,
+        message: expect.stringContaining('schema_version'),
+      });
+    });
+  });
+
+  describe('saveConfig', () => {
+    it('should save config with schema_version', async () => {
+      const manager = new ConfigurationManager({ config: configPath });
+      const config = {
+        schema_version: '1.0.0',
+        providers: [{ name: 'test', apiKey: 'key' }],
+      };
+
+      await manager.saveConfig(config);
+
+      const loaded = await manager.loadConfig();
+      expect(loaded).toEqual(config);
+    });
+
+    it('should add schema_version if missing', async () => {
+      const manager = new ConfigurationManager({ config: configPath });
+      const config = {
+        schema_version: '',
+        providers: [{ name: 'test' }],
+      };
+
+      await manager.saveConfig(config);
+
+      const loaded = await manager.loadConfig();
+      expect(loaded.schema_version).toBeTruthy();
+    });
+
+    it('should create directory if it does not exist', async () => {
+      const nestedPath = join(tempDir, 'nested', 'dir', 'config.json');
+      const manager = new ConfigurationManager({ config: nestedPath });
+
+      await manager.saveConfig({
+        schema_version: '1.0.0',
+        providers: [],
+      });
+
+      const loaded = await manager.loadConfig();
+      expect(loaded.schema_version).toBe('1.0.0');
+    });
+  });
+
+  describe('getProvider', () => {
+    beforeEach(async () => {
+      const config = {
+        schema_version: '1.0.0',
+        defaultProvider: 'openai',
+        providers: [
+          { name: 'openai', apiKey: 'key1' },
+          { name: 'anthropic', apiKey: 'key2' },
+        ],
+      };
+      await writeFile(configPath, JSON.stringify(config), 'utf-8');
+    });
+
+    it('should return provider by name', async () => {
+      const manager = new ConfigurationManager({ config: configPath });
+      const provider = await manager.getProvider('anthropic');
+
+      expect(provider.name).toBe('anthropic');
+      expect(provider.apiKey).toBe('key2');
+    });
+
+    it('should return default provider when no name specified', async () => {
+      const manager = new ConfigurationManager({ config: configPath });
+      const provider = await manager.getProvider();
+
+      expect(provider.name).toBe('openai');
+    });
+
+    it('should throw PAIError with exit code 1 when provider not found', async () => {
+      const manager = new ConfigurationManager({ config: configPath });
+
+      await expect(manager.getProvider('nonexistent')).rejects.toThrow(
+        PAIError
+      );
+      await expect(manager.getProvider('nonexistent')).rejects.toMatchObject({
+        exitCode: 1,
+      });
+    });
+
+    it('should throw PAIError with exit code 1 when no default provider', async () => {
+      const config = {
+        schema_version: '1.0.0',
+        providers: [{ name: 'test' }],
+      };
+      await writeFile(configPath, JSON.stringify(config), 'utf-8');
+
+      const manager = new ConfigurationManager({ config: configPath });
+
+      await expect(manager.getProvider()).rejects.toThrow(PAIError);
+      await expect(manager.getProvider()).rejects.toMatchObject({
+        exitCode: 1,
+      });
+    });
+  });
+
+  describe('addProvider', () => {
+    it('should add new provider', async () => {
+      const manager = new ConfigurationManager({ config: configPath });
+      await manager.addProvider({ name: 'openai', apiKey: 'test-key' });
+
+      const config = await manager.loadConfig();
+      expect(config.providers).toHaveLength(1);
+      expect(config.providers[0]?.name).toBe('openai');
+    });
+
+    it('should update existing provider', async () => {
+      const manager = new ConfigurationManager({ config: configPath });
+      await manager.addProvider({ name: 'openai', apiKey: 'key1' });
+      await manager.addProvider({ name: 'openai', apiKey: 'key2' });
+
+      const config = await manager.loadConfig();
+      expect(config.providers).toHaveLength(1);
+      expect(config.providers[0]?.apiKey).toBe('key2');
+    });
+  });
+
+  describe('deleteProvider', () => {
+    beforeEach(async () => {
+      const manager = new ConfigurationManager({ config: configPath });
+      await manager.addProvider({ name: 'openai', apiKey: 'key1' });
+      await manager.addProvider({ name: 'anthropic', apiKey: 'key2' });
+    });
+
+    it('should delete existing provider', async () => {
+      const manager = new ConfigurationManager({ config: configPath });
+      await manager.deleteProvider('openai');
+
+      const config = await manager.loadConfig();
+      expect(config.providers).toHaveLength(1);
+      expect(config.providers[0]?.name).toBe('anthropic');
+    });
+
+    it('should throw PAIError with exit code 1 when provider not found', async () => {
+      const manager = new ConfigurationManager({ config: configPath });
+
+      await expect(manager.deleteProvider('nonexistent')).rejects.toThrow(
+        PAIError
+      );
+      await expect(
+        manager.deleteProvider('nonexistent')
+      ).rejects.toMatchObject({
+        exitCode: 1,
+      });
+    });
+  });
+
+  describe('config path resolution', () => {
+    it('should use --config flag when provided', () => {
+      const manager = new ConfigurationManager({ config: '/custom/path.json' });
+      expect(manager.getConfigPath()).toBe('/custom/path.json');
+    });
+
+    it('should use PAI_CONFIG env var when --config not provided', () => {
+      const originalEnv = process.env.PAI_CONFIG;
+      process.env.PAI_CONFIG = '/env/path.json';
+
+      const manager = new ConfigurationManager({});
+      expect(manager.getConfigPath()).toBe('/env/path.json');
+
+      // Restore original env
+      if (originalEnv) {
+        process.env.PAI_CONFIG = originalEnv;
+      } else {
+        delete process.env.PAI_CONFIG;
+      }
+    });
+
+    it('should use default path when no overrides', () => {
+      const originalEnv = process.env.PAI_CONFIG;
+      delete process.env.PAI_CONFIG;
+
+      const manager = new ConfigurationManager({});
+      const path = manager.getConfigPath();
+      // Check path contains the expected segments (works on both Unix and Windows)
+      expect(path).toContain('config');
+      expect(path).toContain('pai');
+      expect(path).toContain('default.json');
+
+      // Restore original env
+      if (originalEnv) {
+        process.env.PAI_CONFIG = originalEnv;
+      }
+    });
+  });
+
+  describe('resolveCredentials', () => {
+    it('should use CLI parameter when provided', async () => {
+      const manager = new ConfigurationManager({ config: configPath });
+      const creds = await manager.resolveCredentials('openai', 'cli-key');
+
+      expect(creds).toBe('cli-key');
+    });
+
+    it('should use environment variable when CLI param not provided', async () => {
+      const originalEnv = process.env.PAI_OPENAI_API_KEY;
+      process.env.PAI_OPENAI_API_KEY = 'env-key';
+
+      const manager = new ConfigurationManager({ config: configPath });
+      const creds = await manager.resolveCredentials('openai');
+
+      expect(creds).toBe('env-key');
+
+      // Restore
+      if (originalEnv) {
+        process.env.PAI_OPENAI_API_KEY = originalEnv;
+      } else {
+        delete process.env.PAI_OPENAI_API_KEY;
+      }
+    });
+
+    it('should use config file when CLI and env not provided', async () => {
+      const config = {
+        schema_version: '1.0.0',
+        providers: [{ name: 'openai', apiKey: 'config-key' }],
+      };
+      await writeFile(configPath, JSON.stringify(config), 'utf-8');
+
+      const originalEnv = process.env.PAI_OPENAI_API_KEY;
+      delete process.env.PAI_OPENAI_API_KEY;
+
+      const manager = new ConfigurationManager({ config: configPath });
+      const creds = await manager.resolveCredentials('openai');
+
+      expect(creds).toBe('config-key');
+
+      // Restore
+      if (originalEnv) {
+        process.env.PAI_OPENAI_API_KEY = originalEnv;
+      }
+    });
+
+    it('should use auth.json when other sources not available', async () => {
+      const authPath = join(tempDir, 'auth.json');
+      const authData = {
+        'github-copilot': {
+          type: 'oauth',
+          access: 'auth-token',
+          expires: Date.now() + 10000,
+        },
+      };
+      await writeFile(authPath, JSON.stringify(authData), 'utf-8');
+
+      // Change working directory to tempDir for this test
+      const originalCwd = process.cwd();
+      process.chdir(tempDir);
+
+      const manager = new ConfigurationManager({ config: configPath });
+      const creds = await manager.resolveCredentials('github-copilot');
+
+      expect(creds).toBe('auth-token');
+
+      // Restore
+      process.chdir(originalCwd);
+    });
+
+    it('should throw PAIError with exit code 1 when no credentials found', async () => {
+      const originalEnv = process.env.PAI_OPENAI_API_KEY;
+      delete process.env.PAI_OPENAI_API_KEY;
+
+      const manager = new ConfigurationManager({ config: configPath });
+
+      await expect(manager.resolveCredentials('openai')).rejects.toThrow(
+        PAIError
+      );
+      await expect(manager.resolveCredentials('openai')).rejects.toMatchObject({
+        exitCode: 1,
+        message: expect.stringContaining('No credentials found'),
+      });
+
+      // Restore
+      if (originalEnv) {
+        process.env.PAI_OPENAI_API_KEY = originalEnv;
+      }
+    });
+
+    it('should handle provider names with hyphens in env var', async () => {
+      const originalEnv = process.env.PAI_GITHUB_COPILOT_API_KEY;
+      process.env.PAI_GITHUB_COPILOT_API_KEY = 'env-key';
+
+      const manager = new ConfigurationManager({ config: configPath });
+      const creds = await manager.resolveCredentials('github-copilot');
+
+      expect(creds).toBe('env-key');
+
+      // Restore
+      if (originalEnv) {
+        process.env.PAI_GITHUB_COPILOT_API_KEY = originalEnv;
+      } else {
+        delete process.env.PAI_GITHUB_COPILOT_API_KEY;
+      }
+    });
+  });
+});

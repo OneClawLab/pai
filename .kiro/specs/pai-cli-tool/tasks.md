@@ -6,7 +6,7 @@ This implementation plan breaks down the PAI CLI tool into discrete coding tasks
 
 ## Tasks
 
-- [ ] 1. Set up project infrastructure and core types
+- [x] 1. Set up project infrastructure and core types
   - Create TypeScript interfaces for all data models (PAIConfig, ProviderConfig, Message, etc.)
   - Set up vitest testing framework with fast-check for property-based testing
   - Create directory structure for source and tests
@@ -14,7 +14,7 @@ This implementation plan breaks down the PAI CLI tool into discrete coding tasks
   - _Requirements: All (foundational)_
 
 - [ ] 2. Implement Configuration Manager
-  - [ ] 2.1 Create ConfigurationManager class with file I/O
+  - [x] 2.1 Create ConfigurationManager class with file I/O
     - Implement loadConfig() with JSON parsing and validation
     - Implement saveConfig() with atomic writes and directory creation
     - Handle config path resolution (--config > PAI_CONFIG > default)
@@ -39,7 +39,7 @@ This implementation plan breaks down the PAI CLI tool into discrete coding tasks
     - _Requirements: 1.5_
 
 - [ ] 3. Implement credential resolution
-  - [ ] 3.1 Add resolveCredentials() method to ConfigurationManager
+  - [x] 3.1 Add resolveCredentials() method to ConfigurationManager
     - Check CLI parameters first
     - Check environment variables (PAI_<PROVIDER>_API_KEY pattern)
     - Check config file
@@ -55,7 +55,7 @@ This implementation plan breaks down the PAI CLI tool into discrete coding tasks
     - **Validates: Requirements 4.6**
 
 - [ ] 4. Implement Session Manager
-  - [ ] 4.1 Create SessionManager class with JSONL support
+  - [x] 4.1 Create SessionManager class with JSONL support
     - Implement loadMessages() to read JSONL line by line
     - Implement appendMessage() and appendMessages() for atomic writes
     - Support multimodal content (string, object, array)
@@ -74,11 +74,11 @@ This implementation plan breaks down the PAI CLI tool into discrete coding tasks
     - **Property 14: Malformed Session Error Handling**
     - **Validates: Requirements 6.7**
 
-- [ ] 5. Checkpoint - Ensure all tests pass
+- [x] 5. Checkpoint - Ensure all tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
 - [ ] 6. Implement bash_exec tool
-  - [ ] 6.1 Create bash_exec tool with command execution
+  - [x] 6.1 Create bash_exec tool with command execution
     - Implement createBashExecTool() function
     - Use child_process.exec with bash shell
     - Support cwd parameter for working directory
