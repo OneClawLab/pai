@@ -1,5 +1,5 @@
 import { getModel, stream, complete, type Model, type Api } from '@mariozechner/pi-ai';
-import type { LLMClientConfig, Message, Tool, ToolCall, LLMResponse, ProviderConfig } from './types.js';
+import type { LLMClientConfig, Message, Tool, ToolCall, LLMResponse } from './types.js';
 
 /**
  * Build a pi-ai Model object from PAI provider config + runtime overrides.
@@ -85,13 +85,17 @@ export class LLMClient {
           });
           break;
 
-        case 'done':
-          yield {
+        case 'done': {
+          const doneResponse: LLMResponse = {
             content: currentContent,
-            toolCalls: currentToolCalls.length > 0 ? currentToolCalls : undefined,
             finishReason: event.reason,
           };
+          if (currentToolCalls.length > 0) {
+            doneResponse.toolCalls = currentToolCalls;
+          }
+          yield doneResponse;
           break;
+        }
 
         case 'error':
           throw new Error(event.error.errorMessage || 'LLM request failed');
@@ -124,11 +128,15 @@ export class LLMClient {
       }
     }
 
-    return {
+    const response: LLMResponse = {
       content,
-      toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
       finishReason: result.stopReason,
     };
+    if (toolCalls.length > 0) {
+      response.toolCalls = toolCalls;
+    }
+
+    return response;
   }
 
   /**

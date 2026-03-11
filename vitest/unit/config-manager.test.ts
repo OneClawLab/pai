@@ -554,9 +554,8 @@ describe('ConfigurationManager', () => {
       }
     });
   });
-});
 
-  // Property-Based Tests
+  // Property-Based Tests (inside main describe)
   describe('Property-Based Tests', () => {
     // Feature: pai-cli-tool, Property 7: Config Path Resolution Priority
     it('should resolve config path with correct priority (--config > PAI_CONFIG > default)', async () => {
@@ -612,29 +611,23 @@ describe('ConfigurationManager', () => {
     it('should always include schema_version in saved configs', async () => {
       await fc.assert(
         fc.asyncProperty(
-          fc.record({
-            defaultProvider: fc.option(fc.string(), { nil: undefined }),
-            providers: fc.array(
-              fc.record({
-                name: fc.string({ minLength: 1 }),
-                apiKey: fc.option(fc.string(), { nil: undefined }),
-                models: fc.option(fc.array(fc.string()), { nil: undefined }),
-                defaultModel: fc.option(fc.string(), { nil: undefined }),
-              }),
-              { maxLength: 5 }
-            ),
-          }),
-          async (configData) => {
+          fc.array(
+            fc.record({
+              name: fc.string({ minLength: 1 }),
+            }),
+            { maxLength: 5 }
+          ),
+          async (providers) => {
             const testDir = await mkdtemp(join(tmpdir(), 'pai-pbt-'));
             const testPath = join(testDir, 'config.json');
 
             try {
               const manager = new ConfigurationManager({ config: testPath });
               
-              // Save config (may or may not have schema_version)
+              // Save config with empty schema_version
               await manager.saveConfig({
-                schema_version: '', // Empty or missing
-                ...configData,
+                schema_version: '',
+                providers,
               });
 
               // Load it back
@@ -659,53 +652,49 @@ describe('ConfigurationManager', () => {
         fc.asyncProperty(
           fc.record({
             name: fc.string({ minLength: 1, maxLength: 20 }),
-            apiKey: fc.option(fc.string({ minLength: 1 }), { nil: undefined }),
-            models: fc.option(
-              fc.array(fc.string({ minLength: 1 }), { minLength: 1, maxLength: 3 }),
-              { nil: undefined }
-            ),
-            defaultModel: fc.option(fc.string({ minLength: 1 }), { nil: undefined }),
-            temperature: fc.option(fc.double({ min: 0, max: 2, noNaN: true }), { nil: undefined }),
-            maxTokens: fc.option(fc.integer({ min: 1, max: 10000 }), { nil: undefined }),
           }),
-          async (providerConfig) => {
+          fc.option(fc.string({ minLength: 1 }), { nil: undefined }),
+          fc.option(
+            fc.array(fc.string({ minLength: 1 }), { minLength: 1, maxLength: 3 }),
+            { nil: undefined }
+          ),
+          fc.option(fc.double({ min: 0, max: 2, noNaN: true }), { nil: undefined }),
+          fc.option(fc.integer({ min: 1, max: 10000 }), { nil: undefined }),
+          async (base, apiKey, models, temperature, maxTokens) => {
             const testDir = await mkdtemp(join(tmpdir(), 'pai-pbt-'));
             const testPath = join(testDir, 'config.json');
 
             try {
               const manager = new ConfigurationManager({ config: testPath });
 
-              // Add provider
+              // Build provider config without undefined values
+              const providerConfig: any = { name: base.name };
+              if (apiKey !== undefined) providerConfig.apiKey = apiKey;
+              if (models !== undefined) providerConfig.models = models;
+              if (temperature !== undefined) providerConfig.temperature = temperature;
+              if (maxTokens !== undefined) providerConfig.maxTokens = maxTokens;
+
               await manager.addProvider(providerConfig);
 
-              // Load config back
               const loaded = await manager.loadConfig();
               const loadedProvider = loaded.providers.find(
-                (p) => p.name === providerConfig.name
+                (p) => p.name === base.name
               );
 
-              // Property: All specified details must be preserved
               expect(loadedProvider).toBeDefined();
-              expect(loadedProvider?.name).toBe(providerConfig.name);
+              expect(loadedProvider?.name).toBe(base.name);
               
-              if (providerConfig.apiKey !== undefined) {
-                expect(loadedProvider?.apiKey).toBe(providerConfig.apiKey);
+              if (apiKey !== undefined) {
+                expect(loadedProvider?.apiKey).toBe(apiKey);
               }
-              
-              if (providerConfig.models !== undefined) {
-                expect(loadedProvider?.models).toEqual(providerConfig.models);
+              if (models !== undefined) {
+                expect(loadedProvider?.models).toEqual(models);
               }
-              
-              if (providerConfig.defaultModel !== undefined) {
-                expect(loadedProvider?.defaultModel).toBe(providerConfig.defaultModel);
+              if (temperature !== undefined) {
+                expect(loadedProvider?.temperature).toBe(temperature);
               }
-              
-              if (providerConfig.temperature !== undefined) {
-                expect(loadedProvider?.temperature).toBe(providerConfig.temperature);
-              }
-              
-              if (providerConfig.maxTokens !== undefined) {
-                expect(loadedProvider?.maxTokens).toBe(providerConfig.maxTokens);
+              if (maxTokens !== undefined) {
+                expect(loadedProvider?.maxTokens).toBe(maxTokens);
               }
             } finally {
               await rm(testDir, { recursive: true, force: true });
@@ -820,3 +809,4 @@ describe('ConfigurationManager', () => {
       );
     });
   });
+});

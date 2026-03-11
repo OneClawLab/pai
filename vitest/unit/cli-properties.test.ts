@@ -1,6 +1,4 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { PAIError } from '../../src/types.js';
-import { ConfigurationManager } from '../../src/config-manager.js';
 import { handleChatCommand } from '../../src/commands/chat.js';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';

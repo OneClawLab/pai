@@ -13,7 +13,7 @@ This implementation plan breaks down the PAI CLI tool into discrete coding tasks
   - Configure tsup build to ensure proper bin entry
   - _Requirements: All (foundational)_
 
-- [ ] 2. Implement Configuration Manager
+- [x] 2. Implement Configuration Manager
   - [x] 2.1 Create ConfigurationManager class with file I/O
     - Implement loadConfig() with JSON parsing and validation
     - Implement saveConfig() with atomic writes and directory creation
@@ -38,7 +38,7 @@ This implementation plan breaks down the PAI CLI tool into discrete coding tasks
     - Verify exit code 4 for IO errors
     - _Requirements: 1.5_
 
-- [ ] 3. Implement credential resolution
+- [x] 3. Implement credential resolution
   - [x] 3.1 Add resolveCredentials() method to ConfigurationManager
     - Check CLI parameters first
     - Check environment variables (PAI_<PROVIDER>_API_KEY pattern)
@@ -55,7 +55,7 @@ This implementation plan breaks down the PAI CLI tool into discrete coding tasks
     - **Property 10: Sensitive Data Exclusion**
     - **Validates: Requirements 4.6**
 
-- [ ] 4. Implement Session Manager
+- [x] 4. Implement Session Manager
   - [x] 4.1 Create SessionManager class with JSONL support
     - Implement loadMessages() to read JSONL line by line
     - Implement appendMessage() and appendMessages() for atomic writes
@@ -78,7 +78,7 @@ This implementation plan breaks down the PAI CLI tool into discrete coding tasks
 - [x] 5. Checkpoint - Ensure all tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 6. Implement bash_exec tool
+- [x] 6. Implement bash_exec tool
   - [x] 6.1 Create bash_exec tool with command execution
     - Implement createBashExecTool() function
     - Use child_process.exec with bash shell
@@ -101,19 +101,19 @@ This implementation plan breaks down the PAI CLI tool into discrete coding tasks
     - Test various bash constructs (pipes, heredoc, etc.)
     - _Requirements: 9.2, 9.4, 9.6_
 
-- [ ] 7. Implement Tool Registry
+- [x] 7. Implement Tool Registry
   - [x] 7.1 Create ToolRegistry class
     - Implement register(), get(), getAll() methods
     - Implement execute() method for tool invocation
     - Register bash_exec tool in constructor
     - _Requirements: 9.1_
   
-  - [ ]* 7.2 Write unit tests for tool registry
+  - [x]* 7.2 Write unit tests for tool registry
     - Test tool registration and retrieval
     - Test tool execution
     - _Requirements: 9.1_
 
-- [ ] 8. Implement LLM Client wrapper
+- [x] 8. Implement LLM Client wrapper
   - [x] 8.1 Create LLMClient class wrapping pi-ai
     - Initialize pi-ai client based on provider
     - Implement chat() method for streaming responses
@@ -122,13 +122,13 @@ This implementation plan breaks down the PAI CLI tool into discrete coding tasks
     - Handle provider-specific configuration
     - _Requirements: 5.1, 5.3, 5.4_
   
-  - [ ]* 8.2 Write unit tests for LLM client
+  - [x]* 8.2 Write unit tests for LLM client
     - Mock pi-ai library
     - Test streaming and non-streaming modes
     - Test tool call handling
     - _Requirements: 5.1, 5.3, 5.4_
 
-- [ ] 9. Implement Input Resolver
+- [x] 9. Implement Input Resolver
   - [x] 9.1 Create InputResolver class
     - Implement resolveUserInput() for message/stdin/file/images
     - Implement resolveSystemInput() for --system/--system-file
@@ -136,17 +136,18 @@ This implementation plan breaks down the PAI CLI tool into discrete coding tasks
     - Support multimodal content (text + images)
     - _Requirements: 7.1, 7.2, 7.3, 8.1, 8.2, 8.3, 11.1, 11.2, 11.4_
   
-  - [x]* 9.2 Write property test for input source mutual exclusivity
+  - [x] 9.2 Write property test for input source mutual exclusivity
+
     - **Property 16: Input Source Mutual Exclusivity**
     - **Validates: Requirements 8.4**
   
-  - [ ]* 9.3 Write unit tests for input resolution
+  - [x]* 9.3 Write unit tests for input resolution
     - Test each input source type
     - Test system instruction handling
     - Test image encoding
     - _Requirements: 7.1, 7.2, 8.1, 8.2, 8.3, 11.1, 11.2_
 
-- [ ] 10. Implement Output Formatter
+- [x] 10. Implement Output Formatter
   - [x] 10.1 Create OutputFormatter class
     - Implement writeModelOutput() for stdout
     - Implement writeProgress() for stderr (JSON/human-readable)
@@ -171,7 +172,7 @@ This implementation plan breaks down the PAI CLI tool into discrete coding tasks
     - **Property 21: Log File Message Distinction**
     - **Validates: Requirements 12.3**
   
-  - [ ]* 10.6 Write unit tests for output formatting
+  - [x]* 10.6 Write unit tests for output formatting
     - Test JSON vs human-readable modes
     - Test quiet mode
     - Test log file writing
@@ -180,7 +181,7 @@ This implementation plan breaks down the PAI CLI tool into discrete coding tasks
 - [x] 11. Checkpoint - Ensure all tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 12. Implement chat command handler
+- [x] 12. Implement chat command handler
   - [x] 12.1 Create handleChatCommand() function
     - Parse and validate chat command options
     - Resolve configuration and credentials
@@ -201,7 +202,7 @@ This implementation plan breaks down the PAI CLI tool into discrete coding tasks
     - Mock pi-ai library
     - _Requirements: 5.1, 5.2, 5.3, 5.4, 6.1, 6.5, 6.6_
 
-- [ ] 13. Implement model list command
+- [x] 13. Implement model list command
   - [x] 13.1 Create handleModelList() function
     - Load configuration
     - Display configured providers with details
@@ -220,7 +221,7 @@ This implementation plan breaks down the PAI CLI tool into discrete coding tasks
     - Test with missing config
     - _Requirements: 1.1, 1.2, 1.4_
 
-- [ ] 14. Implement model config command
+- [x] 14. Implement model config command
   - [x] 14.1 Create handleModelConfig() function
     - Support --add flag to add/update provider
     - Support --delete flag to remove provider
@@ -244,7 +245,7 @@ This implementation plan breaks down the PAI CLI tool into discrete coding tasks
     - Test creating config file
     - _Requirements: 2.1, 2.2, 2.4_
 
-- [ ] 15. Implement CLI parser and main entry point
+- [x] 15. Implement CLI parser and main entry point
   - [x] 15.1 Create main CLI structure with Commander.js
     - Define all commands and options
     - Wire up command handlers
@@ -269,7 +270,7 @@ This implementation plan breaks down the PAI CLI tool into discrete coding tasks
     - **Property 23: Provider Existence Validation**
     - **Validates: Requirements 15.5**
 
-- [ ] 16. Implement provider and model selection
+- [x] 16. Implement provider and model selection
   - [x] 16.1 Add provider/model selection logic
     - Support --provider and --model flags
     - Use default provider from config if not specified
@@ -278,21 +279,21 @@ This implementation plan breaks down the PAI CLI tool into discrete coding tasks
     - Handle config defaults with CLI overrides
     - _Requirements: 10.1, 10.2, 10.3, 10.5, 15.1, 15.2, 15.3_
   
-  - [ ]* 16.2 Write unit tests for provider/model selection
+  - [x]* 16.2 Write unit tests for provider/model selection
     - Test explicit provider selection
     - Test default provider
     - Test model parameter passing
     - Test config defaults with overrides
     - _Requirements: 10.1, 10.2, 10.3, 10.5, 15.1, 15.2, 15.3_
 
-- [ ] 17. Final checkpoint and integration testing
+- [x] 17. Final checkpoint and integration testing
   - [x] 17.1 Run full test suite
     - Ensure all unit tests pass
     - Ensure all property tests pass (100+ iterations each)
     - Verify test coverage meets goals (>90% line, >85% branch)
     - _Requirements: All_
   
-  - [ ]* 17.2 Write end-to-end integration tests
+  - [x]* 17.2 Write end-to-end integration tests
     - Test complete chat workflow with real session files
     - Test model configuration workflow
     - Test error scenarios end-to-end

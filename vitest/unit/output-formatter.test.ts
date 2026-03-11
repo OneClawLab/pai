@@ -184,17 +184,101 @@ describe('OutputFormatter', () => {
       expect(content).toContain('### User');
       expect(content).toContain('### Assistant');
     });
-  });
-});
 
-  // Property-Based Tests
+    it('should not log when no log file specified', async () => {
+      const formatter = new OutputFormatter(false, false);
+      // Should not throw
+      await formatter.logUserMessage('Hello');
+      await formatter.logSystemMessage('System');
+    });
+  });
+
+  describe('JSON vs human-readable modes', () => {
+    it('should format tool_call events in human mode', () => {
+      const formatter = new OutputFormatter(false);
+      formatter.writeProgress({
+        type: 'tool_call',
+        data: { name: 'bash_exec', arguments: { command: 'ls' } },
+      });
+
+      expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining('Tool call'));
+      expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining('bash_exec'));
+    });
+
+    it('should format tool_result events in human mode', () => {
+      const formatter = new OutputFormatter(false);
+      formatter.writeProgress({
+        type: 'tool_result',
+        data: { stdout: 'file.txt', exitCode: 0 },
+      });
+
+      expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining('Tool result'));
+    });
+
+    it('should not output chunk events in human mode', () => {
+      const formatter = new OutputFormatter(false);
+      formatter.writeProgress({ type: 'chunk', data: 'partial text' });
+
+      expect(stderrSpy).not.toHaveBeenCalled();
+    });
+
+    it('should output chunk events in JSON mode', () => {
+      const formatter = new OutputFormatter(true);
+      formatter.writeProgress({ type: 'chunk', data: 'partial text' });
+
+      expect(stderrSpy).toHaveBeenCalled();
+      const output = stderrSpy.mock.calls[0][0];
+      const parsed = JSON.parse(output);
+      expect(parsed.type).toBe('chunk');
+      expect(parsed.data).toBe('partial text');
+    });
+
+    it('should format error events in human mode', () => {
+      const formatter = new OutputFormatter(false);
+      formatter.writeProgress({ type: 'error', data: 'something went wrong' });
+
+      expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining('Error'));
+      expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining('something went wrong'));
+    });
+  });
+
+  describe('quiet mode', () => {
+    it('should suppress all progress events', () => {
+      const formatter = new OutputFormatter(false, true);
+      const events: Array<'start' | 'chunk' | 'tool_call' | 'tool_result' | 'complete' | 'error'> = [
+        'start', 'chunk', 'tool_call', 'tool_result', 'complete',
+      ];
+
+      for (const type of events) {
+        formatter.writeProgress({ type, data: {} });
+      }
+
+      expect(stderrSpy).not.toHaveBeenCalled();
+    });
+
+    it('should still write errors in quiet mode', () => {
+      const formatter = new OutputFormatter(false, true);
+      formatter.writeError(new Error('Critical error'));
+
+      expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining('Critical error'));
+    });
+
+    it('should still write model output in quiet mode', () => {
+      const formatter = new OutputFormatter(false, true);
+      formatter.writeModelOutput('Model response');
+
+      expect(stdoutSpy).toHaveBeenCalledWith('Model response');
+    });
+  });
+
+  // Property-Based Tests (now inside the main describe block)
   describe('Property-Based Tests', () => {
     // Feature: pai-cli-tool, Property 11: JSON Output Format Validity
     it('should write valid JSON for all events in JSON mode', async () => {
       await fc.assert(
         fc.asyncProperty(
           fc.record({
-            type: fc.constantFrom('start', 'chunk', 'tool_call', 'tool_result', 'complete', 'error'),
+            type: fc.constantFrom('start', 'chunk', 'tool_call', 'tool_result', 'complete', 'error') as fc.Arbitrary<'start' | 'chunk' | 'tool_call' | 'tool_result' | 'complete' | 'error'>,
             data: fc.oneof(
               fc.string(),
               fc.record({ key: fc.string() }),
@@ -202,23 +286,23 @@ describe('OutputFormatter', () => {
             ),
           }),
           async (event) => {
-            const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
-            
+            const localStderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
             try {
               const formatter = new OutputFormatter(true, false);
               formatter.writeProgress(event);
 
               // Property: All stderr output must be valid JSON
-              const calls = stderrSpy.mock.calls;
+              const calls = localStderrSpy.mock.calls;
               for (const call of calls) {
                 const output = call[0] as string;
                 expect(() => JSON.parse(output)).not.toThrow();
-                
+
                 // Property: Must be single-line (NDJSON)
                 expect(output.trim().split('\n')).toHaveLength(1);
               }
             } finally {
-              stderrSpy.mockRestore();
+              localStderrSpy.mockRestore();
             }
           }
         ),
@@ -232,21 +316,21 @@ describe('OutputFormatter', () => {
         fc.asyncProperty(
           fc.string({ minLength: 1, maxLength: 100 }),
           async (content) => {
-            const stdoutSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
-            const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
-            
+            const localStdoutSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+            const localStderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
             try {
               const formatter = new OutputFormatter(false, false);
               formatter.writeModelOutput(content);
 
               // Property: Model output must go to stdout
-              expect(stdoutSpy).toHaveBeenCalledWith(content);
-              
+              expect(localStdoutSpy).toHaveBeenCalledWith(content);
+
               // Property: Model output must NOT go to stderr
-              expect(stderrSpy).not.toHaveBeenCalled();
+              expect(localStderrSpy).not.toHaveBeenCalled();
             } finally {
-              stdoutSpy.mockRestore();
-              stderrSpy.mockRestore();
+              localStdoutSpy.mockRestore();
+              localStderrSpy.mockRestore();
             }
           }
         ),
@@ -332,3 +416,4 @@ describe('OutputFormatter', () => {
       );
     });
   });
+});

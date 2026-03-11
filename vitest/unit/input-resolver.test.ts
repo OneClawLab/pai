@@ -124,6 +124,85 @@ describe('InputResolver', () => {
       expect(Array.isArray(content)).toBe(true);
       expect((content as any[]).length).toBe(3); // text + 2 images
     });
+
+    it('should detect correct mime type for different image extensions', async () => {
+      const extensions = [
+        { ext: 'png', mime: 'image/png' },
+        { ext: 'jpg', mime: 'image/jpeg' },
+        { ext: 'gif', mime: 'image/gif' },
+        { ext: 'webp', mime: 'image/webp' },
+      ];
+      const pngData = Buffer.from(
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+        'base64'
+      );
+
+      for (const { ext, mime } of extensions) {
+        const imagePath = join(tempDir, `test.${ext}`);
+        await writeFile(imagePath, pngData);
+
+        const content = await resolver.resolveUserInput({
+          message: 'test',
+          images: [imagePath],
+        });
+
+        expect(Array.isArray(content)).toBe(true);
+        const imageBlock = (content as any[])[1];
+        expect(imageBlock.type).toBe('image');
+        expect(imageBlock.mimeType).toBe(mime);
+      }
+    });
+
+    it('should encode image as base64', async () => {
+      const imagePath = join(tempDir, 'test.png');
+      const pngData = Buffer.from(
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+        'base64'
+      );
+      await writeFile(imagePath, pngData);
+
+      const content = await resolver.resolveUserInput({
+        message: 'test',
+        images: [imagePath],
+      });
+
+      const imageBlock = (content as any[])[1];
+      expect(imageBlock.data).toBeTruthy();
+      expect(typeof imageBlock.data).toBe('string');
+      // Should be valid base64
+      expect(() => Buffer.from(imageBlock.data, 'base64')).not.toThrow();
+    });
+
+    it('should throw error for non-existent image file', async () => {
+      await expect(
+        resolver.resolveUserInput({
+          message: 'test',
+          images: ['/nonexistent/image.png'],
+        })
+      ).rejects.toThrow(PAIError);
+
+      await expect(
+        resolver.resolveUserInput({
+          message: 'test',
+          images: ['/nonexistent/image.png'],
+        })
+      ).rejects.toMatchObject({
+        exitCode: 4,
+      });
+    });
+
+    it('should handle empty message string', async () => {
+      const content = await resolver.resolveUserInput({ message: '' });
+      expect(content).toBe('');
+    });
+
+    it('should read file with unicode content', async () => {
+      const filePath = join(tempDir, 'unicode.txt');
+      await writeFile(filePath, '你好世界 🌍', 'utf-8');
+
+      const content = await resolver.resolveUserInput({ file: filePath });
+      expect(content).toBe('你好世界 🌍');
+    });
   });
 
   describe('resolveSystemInput', () => {
@@ -172,10 +251,23 @@ describe('InputResolver', () => {
         exitCode: 4,
       });
     });
-  });
-});
 
-  // Property-Based Tests
+    it('should read system file with unicode content', async () => {
+      const filePath = join(tempDir, 'system-unicode.txt');
+      await writeFile(filePath, '你是一个有用的助手', 'utf-8');
+
+      const result = await resolver.resolveSystemInput(undefined, filePath);
+      expect(result).toBe('你是一个有用的助手');
+    });
+
+    it('should handle empty system text', async () => {
+      const result = await resolver.resolveSystemInput('');
+      // Empty string is falsy, so resolveSystemInput returns it as-is
+      expect(result).toBe('');
+    });
+  });
+
+  // Property-Based Tests (inside main describe)
   describe('Property-Based Tests', () => {
     // Feature: pai-cli-tool, Property 16: Input Source Mutual Exclusivity
     it('should reject multiple input sources', async () => {
@@ -262,3 +354,4 @@ describe('InputResolver', () => {
       );
     });
   });
+});
