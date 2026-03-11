@@ -13,6 +13,18 @@ export interface ProviderConfig {
   defaultModel?: string;
   temperature?: number;
   maxTokens?: number;
+  /** pi-ai API type, e.g. 'openai-responses', 'azure-openai-responses', 'anthropic-messages' */
+  api?: string;
+  /** Base URL for custom/self-hosted endpoints */
+  baseUrl?: string;
+  /** Whether the model supports reasoning/thinking */
+  reasoning?: boolean;
+  /** Input modalities: ['text'] or ['text', 'image'] */
+  input?: string[];
+  /** Context window size in tokens */
+  contextWindow?: number;
+  /** Provider-specific options (e.g. azureApiVersion, azureDeploymentName) */
+  providerOptions?: Record<string, any>;
 }
 
 export interface PAIConfig {
@@ -66,6 +78,18 @@ export interface LLMClientConfig {
   temperature?: number;
   maxTokens?: number;
   stream?: boolean;
+  /** pi-ai API type for custom models */
+  api?: string;
+  /** Base URL for custom/self-hosted endpoints */
+  baseUrl?: string;
+  /** Whether the model supports reasoning */
+  reasoning?: boolean;
+  /** Input modalities */
+  input?: string[];
+  /** Context window size */
+  contextWindow?: number;
+  /** Provider-specific options passed through to pi-ai */
+  providerOptions?: Record<string, any>;
 }
 
 export interface LLMResponse {
@@ -96,7 +120,7 @@ export interface ChatOptions extends CLIOptions {
   maxTokens?: number;
   stream?: boolean;
   log?: string;
-  noAppend?: boolean;
+  append?: boolean; // Commander.js: --no-append sets this to false
 }
 
 export interface ModelConfigOptions extends CLIOptions {

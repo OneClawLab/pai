@@ -80,6 +80,187 @@ describe('ConfigurationManager', () => {
     });
   });
 
+  describe('malformed config handling', () => {
+    it('should handle empty file', async () => {
+      await writeFile(configPath, '', 'utf-8');
+
+      const manager = new ConfigurationManager({ config: configPath });
+
+      await expect(manager.loadConfig()).rejects.toThrow(PAIError);
+      await expect(manager.loadConfig()).rejects.toMatchObject({
+        exitCode: 4,
+      });
+    });
+
+    it('should handle file with only whitespace', async () => {
+      await writeFile(configPath, '   \n\t  ', 'utf-8');
+
+      const manager = new ConfigurationManager({ config: configPath });
+
+      await expect(manager.loadConfig()).rejects.toThrow(PAIError);
+      await expect(manager.loadConfig()).rejects.toMatchObject({
+        exitCode: 4,
+      });
+    });
+
+    it('should handle incomplete JSON object', async () => {
+      await writeFile(configPath, '{"schema_version": "1.0.0", "providers":', 'utf-8');
+
+      const manager = new ConfigurationManager({ config: configPath });
+
+      await expect(manager.loadConfig()).rejects.toThrow(PAIError);
+      await expect(manager.loadConfig()).rejects.toMatchObject({
+        exitCode: 4,
+      });
+    });
+
+    it('should handle JSON with trailing comma', async () => {
+      await writeFile(
+        configPath,
+        '{"schema_version": "1.0.0", "providers": [],}',
+        'utf-8'
+      );
+
+      const manager = new ConfigurationManager({ config: configPath });
+
+      await expect(manager.loadConfig()).rejects.toThrow(PAIError);
+      await expect(manager.loadConfig()).rejects.toMatchObject({
+        exitCode: 4,
+      });
+    });
+
+    it('should handle JSON with single quotes instead of double quotes', async () => {
+      await writeFile(
+        configPath,
+        "{'schema_version': '1.0.0', 'providers': []}",
+        'utf-8'
+      );
+
+      const manager = new ConfigurationManager({ config: configPath });
+
+      await expect(manager.loadConfig()).rejects.toThrow(PAIError);
+      await expect(manager.loadConfig()).rejects.toMatchObject({
+        exitCode: 4,
+      });
+    });
+
+    it('should handle JSON with unquoted keys', async () => {
+      await writeFile(
+        configPath,
+        '{schema_version: "1.0.0", providers: []}',
+        'utf-8'
+      );
+
+      const manager = new ConfigurationManager({ config: configPath });
+
+      await expect(manager.loadConfig()).rejects.toThrow(PAIError);
+      await expect(manager.loadConfig()).rejects.toMatchObject({
+        exitCode: 4,
+      });
+    });
+
+    it('should handle JSON array instead of object', async () => {
+      await writeFile(configPath, '[]', 'utf-8');
+
+      const manager = new ConfigurationManager({ config: configPath });
+
+      await expect(manager.loadConfig()).rejects.toThrow(PAIError);
+      await expect(manager.loadConfig()).rejects.toMatchObject({
+        exitCode: 4,
+      });
+    });
+
+    it('should handle JSON string instead of object', async () => {
+      await writeFile(configPath, '"not an object"', 'utf-8');
+
+      const manager = new ConfigurationManager({ config: configPath });
+
+      await expect(manager.loadConfig()).rejects.toThrow(PAIError);
+      await expect(manager.loadConfig()).rejects.toMatchObject({
+        exitCode: 4,
+      });
+    });
+
+    it('should handle JSON number instead of object', async () => {
+      await writeFile(configPath, '42', 'utf-8');
+
+      const manager = new ConfigurationManager({ config: configPath });
+
+      await expect(manager.loadConfig()).rejects.toThrow(PAIError);
+      await expect(manager.loadConfig()).rejects.toMatchObject({
+        exitCode: 4,
+      });
+    });
+
+    it('should handle config with invalid provider structure', async () => {
+      await writeFile(
+        configPath,
+        JSON.stringify({
+          schema_version: '1.0.0',
+          providers: 'not an array',
+        }),
+        'utf-8'
+      );
+
+      const manager = new ConfigurationManager({ config: configPath });
+
+      await expect(manager.loadConfig()).rejects.toThrow(PAIError);
+      await expect(manager.loadConfig()).rejects.toMatchObject({
+        exitCode: 4,
+      });
+    });
+
+    it('should handle config with null providers', async () => {
+      await writeFile(
+        configPath,
+        JSON.stringify({
+          schema_version: '1.0.0',
+          providers: null,
+        }),
+        'utf-8'
+      );
+
+      const manager = new ConfigurationManager({ config: configPath });
+
+      await expect(manager.loadConfig()).rejects.toThrow(PAIError);
+      await expect(manager.loadConfig()).rejects.toMatchObject({
+        exitCode: 4,
+      });
+    });
+
+    it('should handle config with missing providers field', async () => {
+      await writeFile(
+        configPath,
+        JSON.stringify({
+          schema_version: '1.0.0',
+        }),
+        'utf-8'
+      );
+
+      const manager = new ConfigurationManager({ config: configPath });
+
+      await expect(manager.loadConfig()).rejects.toThrow(PAIError);
+      await expect(manager.loadConfig()).rejects.toMatchObject({
+        exitCode: 4,
+      });
+    });
+
+    it('should include file path in error context', async () => {
+      await writeFile(configPath, '{ invalid }', 'utf-8');
+
+      const manager = new ConfigurationManager({ config: configPath });
+
+      try {
+        await manager.loadConfig();
+        expect(false).toBe(true); // Should not reach here
+      } catch (error: any) {
+        expect(error.context).toBeDefined();
+        // Context is an object with path property
+        expect(error.context.path).toBe(configPath);
+      }
+    });
+  });
+
   describe('saveConfig', () => {
     it('should save config with schema_version', async () => {
       const manager = new ConfigurationManager({ config: configPath });

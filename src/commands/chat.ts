@@ -26,6 +26,41 @@ export async function handleChatCommand(
   const toolRegistry = new ToolRegistry();
 
   try {
+    // Validate model parameters
+    if (options.temperature !== undefined) {
+      if (isNaN(options.temperature) || !isFinite(options.temperature)) {
+        throw new PAIError(
+          'Invalid temperature value',
+          1,
+          { temperature: options.temperature, message: 'Temperature must be a finite number' }
+        );
+      }
+      if (options.temperature < 0 || options.temperature > 2) {
+        throw new PAIError(
+          'Invalid temperature value',
+          1,
+          { temperature: options.temperature, message: 'Temperature must be between 0 and 2' }
+        );
+      }
+    }
+
+    if (options.maxTokens !== undefined) {
+      if (isNaN(options.maxTokens) || !isFinite(options.maxTokens)) {
+        throw new PAIError(
+          'Invalid maxTokens value',
+          1,
+          { maxTokens: options.maxTokens, message: 'maxTokens must be a finite number' }
+        );
+      }
+      if (options.maxTokens <= 0) {
+        throw new PAIError(
+          'Invalid maxTokens value',
+          1,
+          { maxTokens: options.maxTokens, message: 'maxTokens must be greater than 0' }
+        );
+      }
+    }
+
     // Load configuration and resolve credentials
     const provider = await configManager.getProvider(options.provider);
     const modelName = options.model || provider.defaultModel || provider.models?.[0];
@@ -48,6 +83,12 @@ export async function handleChatCommand(
       temperature: options.temperature ?? provider.temperature,
       maxTokens: options.maxTokens ?? provider.maxTokens,
       stream: options.stream,
+      api: provider.api,
+      baseUrl: provider.baseUrl,
+      reasoning: provider.reasoning,
+      input: provider.input,
+      contextWindow: provider.contextWindow,
+      providerOptions: provider.providerOptions,
     });
 
     // Load session history
@@ -72,9 +113,12 @@ export async function handleChatCommand(
     }
 
     // Resolve user input
+    // Only use stdin if: not a TTY AND no other input source provided
+    const hasExplicitInput = prompt !== undefined || options.inputFile !== undefined;
+    const stdinAvailable = !process.stdin.isTTY && !hasExplicitInput;
     const userInput = await inputResolver.resolveUserInput({
       message: prompt,
-      stdin: !process.stdin.isTTY,
+      stdin: stdinAvailable,
       file: options.inputFile,
       images: options.image,
     });
@@ -211,7 +255,8 @@ export async function handleChatCommand(
     }
 
     // Save session if not disabled
-    if (!options.noAppend && sessionManager.getSessionPath()) {
+    // Commander.js parses --no-append as options.append = false
+    if (options.append !== false && sessionManager.getSessionPath()) {
       await sessionManager.appendMessages(messages);
     }
 

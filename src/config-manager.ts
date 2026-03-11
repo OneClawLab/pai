@@ -50,6 +50,23 @@ export class ConfigurationManager {
         );
       }
 
+      // Validate providers field exists and is an array
+      if (!config.providers) {
+        throw new PAIError(
+          'Config file is missing providers field',
+          4 as ExitCode,
+          { path: this.configPath }
+        );
+      }
+
+      if (!Array.isArray(config.providers)) {
+        throw new PAIError(
+          'Config file providers field must be an array',
+          4 as ExitCode,
+          { path: this.configPath }
+        );
+      }
+
       return config;
     } catch (error) {
       if (error instanceof PAIError) {

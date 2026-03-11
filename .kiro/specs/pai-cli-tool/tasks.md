@@ -33,7 +33,7 @@ This implementation plan breaks down the PAI CLI tool into discrete coding tasks
     - **Property 3: Configuration Persistence Round-Trip**
     - **Validates: Requirements 2.1**
   
-  - [ ]* 2.5 Write unit tests for malformed config handling
+  - [x]* 2.5 Write unit tests for malformed config handling
     - Test various malformed JSON scenarios
     - Verify exit code 4 for IO errors
     - _Requirements: 1.5_
@@ -46,7 +46,8 @@ This implementation plan breaks down the PAI CLI tool into discrete coding tasks
     - Check auth.json for OAuth credentials
     - _Requirements: 4.1, 4.2, 4.3, 4.5_
   
-  - [x]* 3.2 Write property test for credential resolution priority
+  - [x] 3.2 Write property test for credential resolution priority
+
     - **Property 9: Credential Resolution Priority**
     - **Validates: Requirements 4.1, 4.2, 4.3**
   
@@ -94,7 +95,7 @@ This implementation plan breaks down the PAI CLI tool into discrete coding tasks
     - **Property 18: Command Result Structure**
     - **Validates: Requirements 9.5**
   
-  - [ ]* 6.4 Write unit tests for bash_exec edge cases
+  - [x]* 6.4 Write unit tests for bash_exec edge cases
     - Test command failures
     - Test cwd parameter
     - Test various bash constructs (pipes, heredoc, etc.)
@@ -191,7 +192,7 @@ This implementation plan breaks down the PAI CLI tool into discrete coding tasks
     - Format and output responses
     - _Requirements: 5.1, 5.2, 5.3, 5.4, 6.5, 6.6, 7.4, 10.1, 10.2, 10.3, 10.5_
   
-  - [ ]* 12.2 Write integration tests for chat command
+  - [x]* 12.2 Write integration tests for chat command
     - Test basic chat flow
     - Test with session file
     - Test with system instructions
@@ -260,7 +261,7 @@ This implementation plan breaks down the PAI CLI tool into discrete coding tasks
     - **Property 22: Error Message Context**
     - **Validates: Requirements 14.7**
   
-  - [ ]* 15.4 Write property test for invalid parameter rejection
+  - [x]* 15.4 Write property test for invalid parameter rejection
     - **Property 19: Invalid Parameter Rejection**
     - **Validates: Requirements 10.4**
   

@@ -192,4 +192,99 @@ describe('CLI Property-Based Tests', () => {
       );
     });
   });
+
+  // Feature: pai-cli-tool, Property 19: Invalid Parameter Rejection
+  describe('Property 19: Invalid Parameter Rejection', () => {
+    it('should reject invalid temperature values', async () => {
+      await fc.assert(
+        fc.asyncProperty(
+          fc.oneof(
+            fc.double({ min: -10, max: -0.01 }), // Negative temperature
+            fc.double({ min: 2.01, max: 10 }), // Temperature > 2
+            fc.constant(NaN),
+            fc.constant(Infinity),
+            fc.constant(-Infinity)
+          ),
+          async (invalidTemp) => {
+            const stderrWrites: string[] = [];
+            const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation((chunk: any) => {
+              stderrWrites.push(String(chunk));
+              return true;
+            });
+            const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {}) as any);
+
+            try {
+              const config = {
+                schema_version: '1.0.0',
+                providers: [{ name: 'test-provider', apiKey: 'test-key' }],
+              };
+              await writeFile(configPath, JSON.stringify(config), 'utf-8');
+
+              await handleChatCommand('test', {
+                config: configPath,
+                provider: 'test-provider',
+                temperature: invalidTemp,
+              });
+
+              // Property: Should exit with code 1 for invalid parameters
+              expect(exitSpy).toHaveBeenCalledWith(1);
+              
+              // Property: Error message should be written to stderr
+              const allErrors = stderrWrites.join('');
+              expect(allErrors.length).toBeGreaterThan(0);
+            } finally {
+              stderrSpy.mockRestore();
+              exitSpy.mockRestore();
+            }
+          }
+        ),
+        { numRuns: 30 }
+      );
+    });
+
+    it('should reject invalid maxTokens values', async () => {
+      await fc.assert(
+        fc.asyncProperty(
+          fc.oneof(
+            fc.integer({ min: -1000, max: -1 }), // Negative maxTokens
+            fc.constant(0), // Zero maxTokens
+            fc.constant(NaN)
+          ),
+          async (invalidMaxTokens) => {
+            const stderrWrites: string[] = [];
+            const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation((chunk: any) => {
+              stderrWrites.push(String(chunk));
+              return true;
+            });
+            const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {}) as any);
+
+            try {
+              const config = {
+                schema_version: '1.0.0',
+                providers: [{ name: 'test-provider', apiKey: 'test-key' }],
+              };
+              await writeFile(configPath, JSON.stringify(config), 'utf-8');
+
+              await handleChatCommand('test', {
+                config: configPath,
+                provider: 'test-provider',
+                maxTokens: invalidMaxTokens,
+              });
+
+              // Property: Should exit with code 1 for invalid parameters
+              expect(exitSpy).toHaveBeenCalledWith(1);
+              
+              // Property: Error message should be written to stderr
+              const allErrors = stderrWrites.join('');
+              expect(allErrors.length).toBeGreaterThan(0);
+            } finally {
+              stderrSpy.mockRestore();
+              exitSpy.mockRestore();
+            }
+          }
+        ),
+        { numRuns: 30 }
+      );
+    });
+  });
 });

@@ -214,6 +214,193 @@ describe('bash_exec tool', () => {
       expect(result.stdout).toContain('1');
       expect(result.stdout).toContain('100');
     });
+
+    it('should handle command with invalid cwd', async () => {
+      const args: BashExecArgs = {
+        command: 'echo test',
+        cwd: '/nonexistent/directory/xyz',
+      };
+      const result = await tool.handler(args);
+
+      // Should fail with non-zero exit code
+      expect(result.exitCode).not.toBe(0);
+    });
+
+    it('should handle command that outputs only to stderr', async () => {
+      const cmd = isWindows
+        ? 'echo error message 1>&2'
+        : 'echo "error message" >&2';
+      const args: BashExecArgs = { command: cmd };
+      const result = await tool.handler(args);
+
+      expect(result.exitCode).toBe(0);
+      expect(result.stderr).toContain('error');
+      expect(result.stdout).toBe('');
+    });
+
+    it('should handle command with both stdout and stderr', async () => {
+      const cmd = isWindows
+        ? 'echo stdout && echo stderr 1>&2'
+        : 'echo "stdout" && echo "stderr" >&2';
+      const args: BashExecArgs = { command: cmd };
+      const result = await tool.handler(args);
+
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).toContain('stdout');
+      expect(result.stderr).toContain('stderr');
+    });
+
+    it('should handle command with redirection', async () => {
+      const tempDir = await mkdtemp(join(tmpdir(), 'pai-bash-test-'));
+
+      try {
+        const outputFile = join(tempDir, 'output.txt');
+        const cmd = isWindows
+          ? `echo test content > ${outputFile}`
+          : `echo "test content" > ${outputFile}`;
+        const args: BashExecArgs = { command: cmd };
+        const result = await tool.handler(args);
+
+        expect(result.exitCode).toBe(0);
+
+        // Verify file was created
+        const cmd2 = isWindows ? `type ${outputFile}` : `cat ${outputFile}`;
+        const result2 = await tool.handler({ command: cmd2 });
+        expect(result2.stdout).toContain('test content');
+      } finally {
+        if (isWindows) {
+          await new Promise((resolve) => setTimeout(resolve, 100));
+        }
+        await rm(tempDir, { recursive: true, force: true });
+      }
+    });
+
+    it('should handle heredoc on Unix', async () => {
+      if (isWindows) {
+        // Skip on Windows - heredoc not supported in cmd.exe
+        return;
+      }
+
+      const args: BashExecArgs = {
+        command: 'cat << EOF\nLine 1\nLine 2\nLine 3\nEOF',
+      };
+      const result = await tool.handler(args);
+
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).toContain('Line 1');
+      expect(result.stdout).toContain('Line 2');
+      expect(result.stdout).toContain('Line 3');
+    });
+
+    it('should handle xargs on Unix', async () => {
+      if (isWindows) {
+        // Skip on Windows - xargs not available in cmd.exe
+        return;
+      }
+
+      const args: BashExecArgs = {
+        command: 'echo "file1 file2 file3" | xargs -n 1 echo Processing:',
+      };
+      const result = await tool.handler(args);
+
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).toContain('Processing: file1');
+      expect(result.stdout).toContain('Processing: file2');
+      expect(result.stdout).toContain('Processing: file3');
+    });
+
+    it('should handle command with quotes', async () => {
+      const args: BashExecArgs = {
+        command: 'echo "Hello World"',
+      };
+      const result = await tool.handler(args);
+
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).toContain('Hello World');
+    });
+
+    it('should handle command with single quotes on Unix', async () => {
+      if (isWindows) {
+        // Windows cmd.exe doesn't handle single quotes the same way
+        return;
+      }
+
+      const args: BashExecArgs = {
+        command: "echo 'Single quoted text'",
+      };
+      const result = await tool.handler(args);
+
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).toContain('Single quoted text');
+    });
+
+    it('should handle command with backticks on Unix', async () => {
+      if (isWindows) {
+        // Windows cmd.exe doesn't support backticks
+        return;
+      }
+
+      const args: BashExecArgs = {
+        command: 'echo `echo nested`',
+      };
+      const result = await tool.handler(args);
+
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).toContain('nested');
+    });
+
+    it('should handle command with conditional execution', async () => {
+      const cmd = isWindows
+        ? 'echo success && echo next || echo failed'
+        : 'echo success && echo next || echo failed';
+      const args: BashExecArgs = { command: cmd };
+      const result = await tool.handler(args);
+
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).toContain('success');
+      expect(result.stdout).toContain('next');
+      expect(result.stdout).not.toContain('failed');
+    });
+
+    it('should handle command with OR operator on failure', async () => {
+      const cmd = isWindows
+        ? '(exit 1) || echo fallback'
+        : 'false || echo fallback';
+      const args: BashExecArgs = { command: cmd };
+      const result = await tool.handler(args);
+
+      // On Windows, the OR operator behavior is different
+      // Just verify the command executed
+      if (isWindows) {
+        expect(result.exitCode).toBeDefined();
+      } else {
+        expect(result.stdout).toContain('fallback');
+      }
+    });
+
+    it('should handle empty command gracefully', async () => {
+      const args: BashExecArgs = { command: '' };
+      const result = await tool.handler(args);
+
+      // Empty command causes an error
+      expect(result.exitCode).not.toBe(0);
+    });
+
+    it('should handle command with trailing whitespace', async () => {
+      const args: BashExecArgs = { command: 'echo test   ' };
+      const result = await tool.handler(args);
+
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).toContain('test');
+    });
+
+    it('should handle command with leading whitespace', async () => {
+      const args: BashExecArgs = { command: '   echo test' };
+      const result = await tool.handler(args);
+
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).toContain('test');
+    });
   });
 });
 

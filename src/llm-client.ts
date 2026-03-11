@@ -1,5 +1,47 @@
-import { getModel, stream, complete, type Model } from '@mariozechner/pi-ai';
-import type { LLMClientConfig, Message, Tool, ToolCall, LLMResponse } from './types.js';
+import { getModel, stream, complete, type Model, type Api } from '@mariozechner/pi-ai';
+import type { LLMClientConfig, Message, Tool, ToolCall, LLMResponse, ProviderConfig } from './types.js';
+
+/**
+ * Build a pi-ai Model object from PAI provider config + runtime overrides.
+ * If the provider is a known pi-ai provider with pre-registered models, use getModel().
+ * Otherwise, construct a custom Model object for custom/Azure/self-hosted endpoints.
+ */
+function buildModel(config: LLMClientConfig): Model<any> {
+  // If provider config specifies an api type, build a custom model
+  if (config.api) {
+    return {
+      id: config.model,
+      name: config.model,
+      api: config.api as Api,
+      provider: config.provider,
+      baseUrl: config.baseUrl || '',
+      reasoning: config.reasoning ?? false,
+      input: (config.input as any) ?? ['text'],
+      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+      contextWindow: config.contextWindow ?? 128000,
+      maxTokens: config.maxTokens ?? 16384,
+    } as Model<any>;
+  }
+
+  // Fall back to pi-ai's built-in model registry
+  try {
+    return getModel(config.provider as any, config.model as any);
+  } catch {
+    // If getModel fails, try building a custom model with openai-completions as default
+    return {
+      id: config.model,
+      name: config.model,
+      api: 'openai-completions' as Api,
+      provider: config.provider,
+      baseUrl: config.baseUrl || '',
+      reasoning: false,
+      input: ['text'],
+      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+      contextWindow: 128000,
+      maxTokens: 16384,
+    } as Model<any>;
+  }
+}
 
 /**
  * LLM Client wrapper for pi-ai library
@@ -10,8 +52,7 @@ export class LLMClient {
 
   constructor(config: LLMClientConfig) {
     this.config = config;
-    // Get model from pi-ai library
-    this.model = getModel(config.provider as any, config.model as any);
+    this.model = buildModel(config);
   }
 
   /**
@@ -99,9 +140,9 @@ export class LLMClient {
       if (msg.role === 'system') {
         return { role: 'system' as const, content: String(msg.content) };
       } else if (msg.role === 'user') {
-        return { role: 'user' as const, content: this.formatContent(msg.content) };
+        return { role: 'user' as const, content: this.formatContent(msg.content), timestamp: Date.now() };
       } else if (msg.role === 'assistant') {
-        return { role: 'assistant' as const, content: this.formatContent(msg.content) };
+        return this.buildAssistantMessage(msg);
       } else if (msg.role === 'tool') {
         return {
           role: 'toolResult' as const,
@@ -112,7 +153,7 @@ export class LLMClient {
           timestamp: Date.now(),
         };
       }
-      return { role: 'user' as const, content: String(msg.content) };
+      return { role: 'user' as const, content: String(msg.content), timestamp: Date.now() };
     });
 
     // Extract system prompt if first message is system
@@ -145,6 +186,39 @@ export class LLMClient {
   }
 
   /**
+   * Build a pi-ai AssistantMessage from a PAI Message.
+   * pi-ai expects assistant messages with content as an array of typed blocks.
+   */
+  private buildAssistantMessage(msg: Message) {
+    const contentBlocks: any[] = [];
+    const textContent = typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content);
+    if (textContent) {
+      contentBlocks.push({ type: 'text', text: textContent });
+    }
+    const toolCalls = (msg as any).tool_calls;
+    if (toolCalls && Array.isArray(toolCalls)) {
+      for (const tc of toolCalls) {
+        contentBlocks.push({
+          type: 'toolCall',
+          id: tc.id,
+          name: tc.name,
+          arguments: tc.arguments,
+        });
+      }
+    }
+    return {
+      role: 'assistant' as const,
+      content: contentBlocks,
+      api: this.model.api,
+      provider: this.model.provider,
+      model: this.model.id,
+      usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },
+      stopReason: (toolCalls ? 'toolUse' : 'stop') as 'toolUse' | 'stop',
+      timestamp: Date.now(),
+    };
+  }
+
+  /**
    * Format message content for pi-ai
    */
   private formatContent(content: any): any {
@@ -161,7 +235,7 @@ export class LLMClient {
   }
 
   /**
-   * Build options for pi-ai
+   * Build options for pi-ai, including provider-specific options
    */
   private buildOptions() {
     const options: any = {
@@ -174,6 +248,11 @@ export class LLMClient {
 
     if (this.config.maxTokens !== undefined) {
       options.maxTokens = this.config.maxTokens;
+    }
+
+    // Merge provider-specific options (e.g. azureApiVersion, azureBaseUrl, azureDeploymentName)
+    if (this.config.providerOptions) {
+      Object.assign(options, this.config.providerOptions);
     }
 
     return options;
