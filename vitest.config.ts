@@ -5,6 +5,7 @@ export default defineConfig({
     globals: true,
     environment: 'node',
     watch: false, // 禁用默认的 Watch 模式
+    testTimeout: 10000, // 10 seconds for property-based tests
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],

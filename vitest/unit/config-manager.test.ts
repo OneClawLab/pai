@@ -534,4 +534,108 @@ describe('ConfigurationManager', () => {
         { numRuns: 100 }
       );
     });
+
+    // Feature: pai-cli-tool, Property 9: Credential Resolution Priority
+    it('should resolve credentials with correct priority (CLI > env > config > auth.json)', async () => {
+      await fc.assert(
+        fc.asyncProperty(
+          fc.record({
+            provider: fc.constantFrom('openai', 'anthropic', 'github-copilot'),
+            cliKey: fc.option(fc.string({ minLength: 10 }), { nil: undefined }),
+            envKey: fc.option(fc.string({ minLength: 10 }), { nil: undefined }),
+            configKey: fc.option(fc.string({ minLength: 10 }), { nil: undefined }),
+          }),
+          async ({ provider, cliKey, envKey, configKey }) => {
+            const testDir = await mkdtemp(join(tmpdir(), 'pai-pbt-'));
+            const testPath = join(testDir, 'config.json');
+
+            // Save original env
+            const envVarName = `PAI_${provider.toUpperCase().replace(/-/g, '_')}_API_KEY`;
+            const originalEnv = process.env[envVarName];
+
+            try {
+              // Set up config file if configKey provided
+              if (configKey) {
+                const config = {
+                  schema_version: '1.0.0',
+                  providers: [{ name: provider, apiKey: configKey }],
+                };
+                await writeFile(testPath, JSON.stringify(config), 'utf-8');
+              }
+
+              // Set env var if envKey provided
+              if (envKey) {
+                process.env[envVarName] = envKey;
+              } else {
+                delete process.env[envVarName];
+              }
+
+              const manager = new ConfigurationManager({ config: testPath });
+
+              // Property: Priority should be CLI > env > config
+              if (cliKey || envKey || configKey) {
+                const resolved = await manager.resolveCredentials(provider, cliKey);
+
+                if (cliKey) {
+                  expect(resolved).toBe(cliKey);
+                } else if (envKey) {
+                  expect(resolved).toBe(envKey);
+                } else if (configKey) {
+                  expect(resolved).toBe(configKey);
+                }
+              }
+            } finally {
+              // Restore env
+              if (originalEnv) {
+                process.env[envVarName] = originalEnv;
+              } else {
+                delete process.env[envVarName];
+              }
+              await rm(testDir, { recursive: true, force: true });
+            }
+          }
+        ),
+        { numRuns: 100 }
+      );
+    });
+
+    // Feature: pai-cli-tool, Property 10: Sensitive Data Exclusion
+    it('should not expose API keys or tokens in error messages', async () => {
+      await fc.assert(
+        fc.asyncProperty(
+          fc.string({ minLength: 20, maxLength: 50 }), // Simulate API key
+          async (apiKey) => {
+            const testDir = await mkdtemp(join(tmpdir(), 'pai-pbt-'));
+            const testPath = join(testDir, 'config.json');
+
+            try {
+              const config = {
+                schema_version: '1.0.0',
+                providers: [{ name: 'test-provider', apiKey }],
+              };
+              await writeFile(testPath, JSON.stringify(config), 'utf-8');
+
+              const manager = new ConfigurationManager({ config: testPath });
+
+              // Try to get non-existent provider - should error without exposing keys
+              try {
+                await manager.getProvider('nonexistent');
+                // Should not reach here
+                expect(false).toBe(true);
+              } catch (error: any) {
+                // Property: Error message should NOT contain the API key
+                expect(error.message).not.toContain(apiKey);
+                if (error.context) {
+                  const contextStr = JSON.stringify(error.context);
+                  expect(contextStr).not.toContain(apiKey);
+                }
+              }
+            } finally {
+              await rm(testDir, { recursive: true, force: true });
+            }
+          }
+        ),
+        { numRuns: 50 }
+      );
+    });
   });

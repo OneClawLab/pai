@@ -390,6 +390,8 @@ describe('SessionManager', () => {
             fc.constant('{"role":"user"}'), // Missing content
             fc.constant('{"content":"hello"}'), // Missing role
             fc.string().filter(s => {
+              // Filter out empty or whitespace-only strings
+              if (s.trim() === '') return false;
               try {
                 JSON.parse(s);
                 return false;

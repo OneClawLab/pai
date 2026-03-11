@@ -46,11 +46,11 @@ This implementation plan breaks down the PAI CLI tool into discrete coding tasks
     - Check auth.json for OAuth credentials
     - _Requirements: 4.1, 4.2, 4.3, 4.5_
   
-  - [ ]* 3.2 Write property test for credential resolution priority
+  - [x]* 3.2 Write property test for credential resolution priority
     - **Property 9: Credential Resolution Priority**
     - **Validates: Requirements 4.1, 4.2, 4.3**
   
-  - [ ]* 3.3 Write property test for sensitive data exclusion
+  - [x]* 3.3 Write property test for sensitive data exclusion
     - **Property 10: Sensitive Data Exclusion**
     - **Validates: Requirements 4.6**
 
@@ -209,11 +209,11 @@ This implementation plan breaks down the PAI CLI tool into discrete coding tasks
     - Handle missing config file gracefully
     - _Requirements: 1.1, 1.2, 1.3, 1.4_
   
-  - [ ]* 13.2 Write property test for provider information display
+  - [x]* 13.2 Write property test for provider information display
     - **Property 1: Provider Information Display Completeness**
     - **Validates: Requirements 1.3**
   
-  - [ ]* 13.3 Write unit tests for model list command
+  - [x]* 13.3 Write unit tests for model list command
     - Test with configured providers
     - Test with --all flag
     - Test with missing config
@@ -228,15 +228,15 @@ This implementation plan breaks down the PAI CLI tool into discrete coding tasks
     - Update existing config atomically
     - _Requirements: 2.1, 2.2, 2.3, 2.4_
   
-  - [ ]* 14.2 Write property test for provider validation
+  - [x]* 14.2 Write property test for provider validation
     - **Property 5: Provider Validation**
     - **Validates: Requirements 2.3**
   
-  - [ ]* 14.3 Write property test for configuration deletion
+  - [x]* 14.3 Write property test for configuration deletion
     - **Property 4: Configuration Deletion**
     - **Validates: Requirements 2.2**
   
-  - [ ]* 14.4 Write unit tests for model config command
+  - [x]* 14.4 Write unit tests for model config command
     - Test adding new provider
     - Test updating existing provider
     - Test deleting provider
@@ -252,11 +252,11 @@ This implementation plan breaks down the PAI CLI tool into discrete coding tasks
     - Ensure error messages include context
     - _Requirements: 14.1, 14.2, 14.3, 14.4, 14.5, 14.6, 14.7, 15.1, 15.2, 15.3, 15.4, 15.5_
   
-  - [ ]* 15.2 Write property test for exit code correctness
+  - [x]* 15.2 Write property test for exit code correctness
     - **Property 6: Exit Code Correctness**
     - **Validates: Requirements 2.5, 2.6, 2.7, 5.8, 5.9, 14.1, 14.2, 14.3, 14.4, 14.5**
   
-  - [ ]* 15.3 Write property test for error message context
+  - [x]* 15.3 Write property test for error message context
     - **Property 22: Error Message Context**
     - **Validates: Requirements 14.7**
   
@@ -264,7 +264,7 @@ This implementation plan breaks down the PAI CLI tool into discrete coding tasks
     - **Property 19: Invalid Parameter Rejection**
     - **Validates: Requirements 10.4**
   
-  - [ ]* 15.5 Write property test for provider existence validation
+  - [x]* 15.5 Write property test for provider existence validation
     - **Property 23: Provider Existence Validation**
     - **Validates: Requirements 15.5**
 
