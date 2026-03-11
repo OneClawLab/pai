@@ -1,0 +1,151 @@
+import { appendFile, writeFile } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
+import type { OutputEvent, ExitCode } from './types.js';
+import { PAIError } from './types.js';
+
+/**
+ * Handles output formatting for stdout/stderr
+ */
+export class OutputFormatter {
+  private jsonMode: boolean;
+  private quietMode: boolean;
+  private logFile?: string;
+
+  constructor(jsonMode: boolean = false, quietMode: boolean = false, logFile?: string) {
+    this.jsonMode = jsonMode;
+    this.quietMode = quietMode;
+    this.logFile = logFile;
+  }
+
+  /**
+   * Write model output to stdout
+   * Always writes to stdout regardless of mode
+   */
+  writeModelOutput(content: string): void {
+    process.stdout.write(content);
+
+    // Also append to log file if specified
+    if (this.logFile) {
+      this.appendToLog('assistant', content).catch(() => {
+        // Silently fail log writes to not interrupt main flow
+      });
+    }
+  }
+
+  /**
+   * Write progress/diagnostic information to stderr
+   */
+  writeProgress(event: OutputEvent): void {
+    // Skip if quiet mode
+    if (this.quietMode) return;
+
+    if (this.jsonMode) {
+      this.writeNDJSON(event);
+    } else {
+      this.writeHumanReadable(event);
+    }
+  }
+
+  /**
+   * Write error to stderr
+   */
+  writeError(error: Error | PAIError): void {
+    if (this.jsonMode) {
+      const errorObj = {
+        type: 'error',
+        message: error.message,
+        ...(error instanceof PAIError && error.context ? { context: error.context } : {}),
+      };
+      process.stderr.write(JSON.stringify(errorObj) + '\n');
+    } else {
+      process.stderr.write(`Error: ${error.message}\n`);
+      if (error instanceof PAIError && error.context) {
+        process.stderr.write(`Context: ${JSON.stringify(error.context)}\n`);
+      }
+    }
+  }
+
+  /**
+   * Write NDJSON event to stderr
+   */
+  private writeNDJSON(event: OutputEvent): void {
+    const line = JSON.stringify({
+      ...event,
+      timestamp: event.timestamp || Date.now(),
+    });
+    process.stderr.write(line + '\n');
+  }
+
+  /**
+   * Write human-readable event to stderr
+   */
+  private writeHumanReadable(event: OutputEvent): void {
+    switch (event.type) {
+      case 'start':
+        process.stderr.write('Starting request...\n');
+        break;
+      case 'chunk':
+        // Don't output individual chunks in human mode
+        break;
+      case 'tool_call':
+        process.stderr.write(`Tool call: ${JSON.stringify(event.data)}\n`);
+        break;
+      case 'tool_result':
+        process.stderr.write(`Tool result: ${JSON.stringify(event.data)}\n`);
+        break;
+      case 'complete':
+        process.stderr.write('Request complete.\n');
+        break;
+      case 'error':
+        process.stderr.write(`Error: ${event.data}\n`);
+        break;
+    }
+  }
+
+  /**
+   * Append to log file in Markdown format
+   */
+  private async appendToLog(role: string, content: string): Promise<void> {
+    if (!this.logFile) return;
+
+    try {
+      const timestamp = new Date().toISOString();
+      const entry = `\n### ${role.charAt(0).toUpperCase() + role.slice(1)} (${timestamp})\n\n${content}\n`;
+
+      if (existsSync(this.logFile)) {
+        await appendFile(this.logFile, entry, 'utf-8');
+      } else {
+        const header = `# Chat Log\n\nGenerated: ${timestamp}\n`;
+        await writeFile(this.logFile, header + entry, 'utf-8');
+      }
+    } catch (error) {
+      throw new PAIError(
+        'Failed to write to log file',
+        4 as ExitCode,
+        { path: this.logFile, error: String(error) }
+      );
+    }
+  }
+
+  /**
+   * Log user message
+   */
+  async logUserMessage(content: string): Promise<void> {
+    if (this.logFile) {
+      await this.appendToLog('user', content).catch(() => {
+        // Silently fail
+      });
+    }
+  }
+
+  /**
+   * Log system message
+   */
+  async logSystemMessage(content: string): Promise<void> {
+    if (this.logFile) {
+      await this.appendToLog('system', content).catch(() => {
+        // Silently fail
+      });
+    }
+  }
+}

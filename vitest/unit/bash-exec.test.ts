@@ -4,6 +4,7 @@ import type { BashExecArgs } from '../../src/types.js';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir, platform } from 'node:os';
+import * as fc from 'fast-check';
 
 const isWindows = platform() === 'win32';
 
@@ -215,3 +216,59 @@ describe('bash_exec tool', () => {
     });
   });
 });
+
+  // Property-Based Tests
+  describe('Property-Based Tests', () => {
+    // Feature: pai-cli-tool, Property 18: Command Result Structure
+    it('should always return stdout, stderr, and exitCode fields', async () => {
+      await fc.assert(
+        fc.asyncProperty(
+          fc.oneof(
+            fc.constant('echo test'),
+            fc.constant('echo hello && echo world'),
+            fc.constant('exit 0'),
+            fc.constant('exit 1'),
+            isWindows ? fc.constant('dir') : fc.constant('ls'),
+            isWindows ? fc.constant('echo test 1>&2') : fc.constant('echo test >&2'),
+          ),
+          async (command) => {
+            const tool = createBashExecTool();
+            const result = await tool.handler({ command });
+
+            // Property: Result must have all three fields
+            expect(result).toHaveProperty('stdout');
+            expect(result).toHaveProperty('stderr');
+            expect(result).toHaveProperty('exitCode');
+
+            // Property: Fields must be correct types
+            expect(typeof result.stdout).toBe('string');
+            expect(typeof result.stderr).toBe('string');
+            expect(typeof result.exitCode).toBe('number');
+          }
+        ),
+        { numRuns: 100 }
+      );
+    });
+
+    // Feature: pai-cli-tool, Property 17: Bash Feature Support
+    it('should support pipes and command chaining', async () => {
+      await fc.assert(
+        fc.asyncProperty(
+          fc.constantFrom(
+            isWindows ? 'echo hello | findstr hello' : 'echo hello | grep hello',
+            isWindows ? 'echo test && echo success' : 'echo test && echo success',
+            isWindows ? 'echo line1 && echo line2' : 'printf "line1\\nline2\\n"'
+          ),
+          async (command) => {
+            const tool = createBashExecTool();
+            const result = await tool.handler({ command });
+
+            // Property: Piped/chained commands should execute successfully
+            expect(result.exitCode).toBe(0);
+            expect(result.stdout).toBeTruthy();
+          }
+        ),
+        { numRuns: 50 }
+      );
+    });
+  });

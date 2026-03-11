@@ -4,6 +4,7 @@ import { PAIError } from '../../src/types.js';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import * as fc from 'fast-check';
 
 describe('ConfigurationManager', () => {
   let tempDir: string;
@@ -373,3 +374,164 @@ describe('ConfigurationManager', () => {
     });
   });
 });
+
+  // Property-Based Tests
+  describe('Property-Based Tests', () => {
+    // Feature: pai-cli-tool, Property 7: Config Path Resolution Priority
+    it('should resolve config path with correct priority (--config > PAI_CONFIG > default)', async () => {
+      await fc.assert(
+        fc.asyncProperty(
+          fc.record({
+            cliPath: fc.option(fc.string({ minLength: 1 }), { nil: undefined }),
+            envPath: fc.option(fc.string({ minLength: 1 }), { nil: undefined }),
+          }),
+          async ({ cliPath, envPath }) => {
+            // Save original env
+            const originalEnv = process.env.PAI_CONFIG;
+            
+            try {
+              // Set env if provided
+              if (envPath) {
+                process.env.PAI_CONFIG = envPath;
+              } else {
+                delete process.env.PAI_CONFIG;
+              }
+
+              const manager = new ConfigurationManager(
+                cliPath ? { config: cliPath } : {}
+              );
+              const resolvedPath = manager.getConfigPath();
+
+              // Verify priority
+              if (cliPath) {
+                expect(resolvedPath).toBe(cliPath);
+              } else if (envPath) {
+                expect(resolvedPath).toBe(envPath);
+              } else {
+                // Should use default path
+                expect(resolvedPath).toContain('config');
+                expect(resolvedPath).toContain('pai');
+                expect(resolvedPath).toContain('default.json');
+              }
+            } finally {
+              // Restore env
+              if (originalEnv) {
+                process.env.PAI_CONFIG = originalEnv;
+              } else {
+                delete process.env.PAI_CONFIG;
+              }
+            }
+          }
+        ),
+        { numRuns: 100 }
+      );
+    });
+
+    // Feature: pai-cli-tool, Property 8: Config Schema Version Invariant
+    it('should always include schema_version in saved configs', async () => {
+      await fc.assert(
+        fc.asyncProperty(
+          fc.record({
+            defaultProvider: fc.option(fc.string(), { nil: undefined }),
+            providers: fc.array(
+              fc.record({
+                name: fc.string({ minLength: 1 }),
+                apiKey: fc.option(fc.string(), { nil: undefined }),
+                models: fc.option(fc.array(fc.string()), { nil: undefined }),
+                defaultModel: fc.option(fc.string(), { nil: undefined }),
+              }),
+              { maxLength: 5 }
+            ),
+          }),
+          async (configData) => {
+            const testDir = await mkdtemp(join(tmpdir(), 'pai-pbt-'));
+            const testPath = join(testDir, 'config.json');
+
+            try {
+              const manager = new ConfigurationManager({ config: testPath });
+              
+              // Save config (may or may not have schema_version)
+              await manager.saveConfig({
+                schema_version: '', // Empty or missing
+                ...configData,
+              });
+
+              // Load it back
+              const loaded = await manager.loadConfig();
+
+              // Property: schema_version must always be present and non-empty
+              expect(loaded).toHaveProperty('schema_version');
+              expect(loaded.schema_version).toBeTruthy();
+              expect(typeof loaded.schema_version).toBe('string');
+            } finally {
+              await rm(testDir, { recursive: true, force: true });
+            }
+          }
+        ),
+        { numRuns: 100 }
+      );
+    });
+
+    // Feature: pai-cli-tool, Property 3: Configuration Persistence Round-Trip
+    it('should preserve all config details through save/load round-trip', async () => {
+      await fc.assert(
+        fc.asyncProperty(
+          fc.record({
+            name: fc.string({ minLength: 1, maxLength: 20 }),
+            apiKey: fc.option(fc.string({ minLength: 1 }), { nil: undefined }),
+            models: fc.option(
+              fc.array(fc.string({ minLength: 1 }), { minLength: 1, maxLength: 3 }),
+              { nil: undefined }
+            ),
+            defaultModel: fc.option(fc.string({ minLength: 1 }), { nil: undefined }),
+            temperature: fc.option(fc.double({ min: 0, max: 2, noNaN: true }), { nil: undefined }),
+            maxTokens: fc.option(fc.integer({ min: 1, max: 10000 }), { nil: undefined }),
+          }),
+          async (providerConfig) => {
+            const testDir = await mkdtemp(join(tmpdir(), 'pai-pbt-'));
+            const testPath = join(testDir, 'config.json');
+
+            try {
+              const manager = new ConfigurationManager({ config: testPath });
+
+              // Add provider
+              await manager.addProvider(providerConfig);
+
+              // Load config back
+              const loaded = await manager.loadConfig();
+              const loadedProvider = loaded.providers.find(
+                (p) => p.name === providerConfig.name
+              );
+
+              // Property: All specified details must be preserved
+              expect(loadedProvider).toBeDefined();
+              expect(loadedProvider?.name).toBe(providerConfig.name);
+              
+              if (providerConfig.apiKey !== undefined) {
+                expect(loadedProvider?.apiKey).toBe(providerConfig.apiKey);
+              }
+              
+              if (providerConfig.models !== undefined) {
+                expect(loadedProvider?.models).toEqual(providerConfig.models);
+              }
+              
+              if (providerConfig.defaultModel !== undefined) {
+                expect(loadedProvider?.defaultModel).toBe(providerConfig.defaultModel);
+              }
+              
+              if (providerConfig.temperature !== undefined) {
+                expect(loadedProvider?.temperature).toBe(providerConfig.temperature);
+              }
+              
+              if (providerConfig.maxTokens !== undefined) {
+                expect(loadedProvider?.maxTokens).toBe(providerConfig.maxTokens);
+              }
+            } finally {
+              await rm(testDir, { recursive: true, force: true });
+            }
+          }
+        ),
+        { numRuns: 100 }
+      );
+    });
+  });
