@@ -12,12 +12,25 @@ const packageJson = JSON.parse(
   readFileSync(join(__dirname, '../package.json'), 'utf8')
 );
 
+// Read pi-ai version
+let piAiVersion = 'unknown';
+try {
+  const piAiPkg = JSON.parse(
+    readFileSync(join(__dirname, '../node_modules/@mariozechner/pi-ai/package.json'), 'utf8')
+  );
+  piAiVersion = piAiPkg.version;
+} catch {
+  // pi-ai package.json not found
+}
+
+const versionString = `pai ${packageJson.version} (pi-ai ${piAiVersion}, Node ${process.version})`;
+
 const program = new Command();
 
 program
   .name('pai')
   .description('PAI - A Unix-style CLI tool for interacting with LLMs')
-  .version(packageJson.version);
+  .version(versionString);
 
 // Chat command
 program
@@ -39,6 +52,7 @@ program
   .option('--json', 'Output progress as NDJSON')
   .option('--quiet', 'Suppress progress output')
   .option('--log <path>', 'Log file path (Markdown)')
+  .option('--dry-run', 'Show resolved config without calling LLM')
   .action(async (prompt: string | undefined, options: ChatOptions) => {
     await handleChatCommand(prompt, options);
   });
@@ -65,9 +79,11 @@ modelCommand
   .option('--config <path>', 'Config file path')
   .option('--add', 'Add or update provider')
   .option('--delete', 'Delete provider')
+  .option('--show', 'Show provider configuration')
   .option('--name <name>', 'Provider name')
   .option('--provider <type>', 'Provider type')
   .option('--set <key=value...>', 'Set configuration values')
+  .option('--json', 'Output as JSON')
   .action(async (options: ModelConfigOptions) => {
     await handleModelConfig(options);
   });

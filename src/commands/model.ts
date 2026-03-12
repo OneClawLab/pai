@@ -14,6 +14,13 @@ export async function handleModelList(options: ModelConfigOptions): Promise<void
   try {
     const config = await configManager.loadConfig();
 
+    // Show config file path (to stderr so it doesn't pollute JSON output)
+    if (!options.json) {
+      console.log(`Config: ${configManager.getConfigPath()}\n`);
+    } else {
+      process.stderr.write(`Config: ${configManager.getConfigPath()}\n`);
+    }
+
     if (options.all) {
       // List all supported providers
       const allProviders = getProviders();
@@ -97,7 +104,44 @@ export async function handleModelConfig(options: ModelConfigOptions): Promise<vo
   const configManager = new ConfigurationManager(options);
 
   try {
-    if (options.add) {
+    // Show config file path
+    process.stderr.write(`Config: ${configManager.getConfigPath()}\n`);
+
+    if (options.show) {
+      // Show a single provider's config
+      if (!options.name) {
+        throw new PAIError('Provider name is required', 1, {
+          message: 'Use --name <provider-name>',
+        });
+      }
+
+      const provider = await configManager.getProvider(options.name);
+
+      // Mask sensitive fields
+      const masked: Record<string, any> = { ...provider };
+      if (masked.apiKey) masked.apiKey = '***';
+      if (masked.oauth) {
+        masked.oauth = {
+          ...masked.oauth,
+          refresh: '***',
+          access: '***',
+        };
+      }
+
+      if (options.json) {
+        console.log(JSON.stringify(masked, null, 2));
+      } else {
+        console.log(`\nProvider: ${provider.name}`);
+        for (const [key, value] of Object.entries(masked)) {
+          if (key === 'name') continue;
+          if (typeof value === 'object' && value !== null) {
+            console.log(`  ${key}: ${JSON.stringify(value)}`);
+          } else {
+            console.log(`  ${key}: ${value}`);
+          }
+        }
+      }
+    } else if (options.add) {
       // Add or update provider
       if (!options.name) {
         throw new PAIError('Provider name is required', 1, {
@@ -127,18 +171,48 @@ export async function handleModelConfig(options: ModelConfigOptions): Promise<vo
         name: options.name,
       };
 
+      // Known configuration keys
+      const knownKeys = new Set([
+        'apiKey', 'defaultModel', 'models', 'temperature', 'maxTokens',
+        'api', 'baseUrl', 'reasoning', 'input', 'contextWindow',
+        'providerOptions',
+      ]);
+
       // Parse --set options
       if (options.set && options.set.length > 0) {
         for (const setting of options.set) {
-          const [key, value] = setting.split('=');
-          if (!key || value === undefined) {
+          const eqIndex = setting.indexOf('=');
+          if (eqIndex < 1) {
             throw new PAIError(
               `Invalid --set format: ${setting}`,
               1,
               { message: 'Use --set key=value' }
             );
           }
-          providerConfig[key] = value;
+          const key = setting.substring(0, eqIndex);
+          const value = setting.substring(eqIndex + 1);
+
+          // Warn on unknown keys (but still allow them for extensibility)
+          const topKey = key.split('.')[0]!;
+          if (!knownKeys.has(topKey)) {
+            console.error(`Warning: unknown key "${key}". Known keys: ${[...knownKeys].join(', ')}`);
+          }
+
+          // Support nested keys like providerOptions.azureApiVersion
+          if (key.includes('.')) {
+            const parts = key.split('.');
+            let target = providerConfig;
+            for (let i = 0; i < parts.length - 1; i++) {
+              const part = parts[i]!;
+              if (!target[part] || typeof target[part] !== 'object') {
+                target[part] = {};
+              }
+              target = target[part];
+            }
+            target[parts[parts.length - 1]!] = value;
+          } else {
+            providerConfig[key] = value;
+          }
         }
       }
 
@@ -158,7 +232,7 @@ export async function handleModelConfig(options: ModelConfigOptions): Promise<vo
       console.log(`Provider "${options.name}" deleted successfully.`);
     } else {
       throw new PAIError('No action specified', 1, {
-        message: 'Use --add or --delete',
+        message: 'Use --add, --delete, or --show',
       });
     }
   } catch (error) {

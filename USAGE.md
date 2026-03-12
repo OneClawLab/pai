@@ -498,6 +498,7 @@ Chat with an LLM. Supports tool calling (bash_exec is built-in).
 - `--json` - Output progress as NDJSON
 - `--quiet` - Suppress progress output
 - `--log <path>` - Log file path (Markdown)
+- `--dry-run` - Show resolved config (provider, model, etc.) without calling LLM
 
 ### `pai model list`
 
@@ -509,14 +510,16 @@ List providers and models.
 
 ### `pai model config`
 
-Configure providers (add/update/delete).
+Configure providers (add/update/delete/show).
 
 **Options:**
 - `--add` - Add or update provider
 - `--delete` - Delete provider
+- `--show` - Show provider configuration (sensitive fields masked)
 - `--name <name>` - Provider name
 - `--provider <type>` - Provider type
-- `--set <key=value...>` - Set configuration values
+- `--set <key=value...>` - Set configuration values (known keys: apiKey, defaultModel, models, temperature, maxTokens, api, baseUrl, reasoning, input, contextWindow, providerOptions)
+- `--json` - Output as JSON (for --show)
 
 ### `pai model login`
 

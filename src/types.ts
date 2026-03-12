@@ -85,21 +85,21 @@ export interface LLMClientConfig {
   provider: string;
   model: string;
   apiKey: string;
-  temperature?: number;
-  maxTokens?: number;
-  stream?: boolean;
+  temperature?: number | undefined;
+  maxTokens?: number | undefined;
+  stream?: boolean | undefined;
   /** pi-ai API type for custom models */
-  api?: string;
+  api?: string | undefined;
   /** Base URL for custom/self-hosted endpoints */
-  baseUrl?: string;
+  baseUrl?: string | undefined;
   /** Whether the model supports reasoning */
-  reasoning?: boolean;
+  reasoning?: boolean | undefined;
   /** Input modalities */
-  input?: string[];
+  input?: string[] | undefined;
   /** Context window size */
-  contextWindow?: number;
+  contextWindow?: number | undefined;
   /** Provider-specific options passed through to pi-ai */
-  providerOptions?: Record<string, any>;
+  providerOptions?: Record<string, any> | undefined;
 }
 
 export interface LLMResponse {
@@ -131,11 +131,13 @@ export interface ChatOptions extends CLIOptions {
   stream?: boolean;
   log?: string;
   append?: boolean; // Commander.js: --no-append sets this to false
+  dryRun?: boolean;
 }
 
 export interface ModelConfigOptions extends CLIOptions {
   add?: boolean;
   delete?: boolean;
+  show?: boolean;
   all?: boolean;
   name?: string;
   provider?: string;
@@ -172,10 +174,10 @@ export interface OutputEvent {
 // ============================================================================
 
 export interface InputSource {
-  message?: string; // CLI argument
-  stdin?: boolean;
-  file?: string;
-  images?: string[];
+  message?: string | undefined; // CLI argument
+  stdin?: boolean | undefined;
+  file?: string | undefined;
+  images?: string[] | undefined;
 }
 
 // ============================================================================

@@ -75,6 +75,21 @@ export async function handleChatCommand(
 
     const apiKey = await configManager.resolveCredentials(provider.name, undefined);
 
+    // --dry-run: show resolved config and exit
+    if (options.dryRun) {
+      const info = {
+        provider: provider.name,
+        model: modelName,
+        configFile: configManager.getConfigPath(),
+        temperature: options.temperature ?? provider.temperature,
+        maxTokens: options.maxTokens ?? provider.maxTokens,
+        stream: options.stream ?? false,
+        credentialSource: 'resolved',
+      };
+      process.stderr.write(JSON.stringify(info, null, 2) + '\n');
+      return;
+    }
+
     // Initialize LLM client
     const llmClient = new LLMClient({
       provider: provider.name,
@@ -93,6 +108,10 @@ export async function handleChatCommand(
 
     // Load session history
     const messages: Message[] = await sessionManager.loadMessages();
+    const loadedMessageCount = messages.length;
+
+    // Track new messages to append to session file
+    const newMessages: Message[] = [];
 
     // Resolve system instruction
     const systemInstruction = await inputResolver.resolveSystemInput(
@@ -103,11 +122,13 @@ export async function handleChatCommand(
     // Add or update system message
     if (systemInstruction) {
       if (messages.length > 0 && messages[0]?.role === 'system') {
-        // Replace existing system message
+        // Replace existing system message (already in session file, no need to append)
         messages[0] = { role: 'system', content: systemInstruction };
       } else {
         // Add new system message at the beginning
-        messages.unshift({ role: 'system', content: systemInstruction });
+        const sysMsg: Message = { role: 'system', content: systemInstruction };
+        messages.unshift(sysMsg);
+        newMessages.push(sysMsg);
       }
       await outputFormatter.logSystemMessage(systemInstruction);
     }
@@ -126,17 +147,28 @@ export async function handleChatCommand(
     // Add or update user message
     const userMessage: Message = { role: 'user', content: userInput };
     
-    if (messages.length > 0 && messages[messages.length - 1]?.role === 'user') {
-      // Replace last user message
+    // If the last loaded message was a user message, replace it (already in session file)
+    // Otherwise add as new message
+    const lastLoadedIsUser = loadedMessageCount > 0 && messages[messages.length - 1]?.role === 'user';
+    if (lastLoadedIsUser) {
       messages[messages.length - 1] = userMessage;
     } else {
-      // Add new user message
       messages.push(userMessage);
+      newMessages.push(userMessage);
     }
 
     await outputFormatter.logUserMessage(
       typeof userInput === 'string' ? userInput : JSON.stringify(userInput)
     );
+
+    // Log request summary
+    await outputFormatter.logRequestSummary({
+      provider: provider.name,
+      model: modelName,
+      temperature: options.temperature ?? provider.temperature,
+      maxTokens: options.maxTokens ?? provider.maxTokens,
+      stream: options.stream,
+    });
 
     // Get all tools
     const tools = toolRegistry.getAll();
@@ -197,6 +229,7 @@ export async function handleChatCommand(
       }
 
       messages.push(assistantMessage);
+      newMessages.push(assistantMessage);
 
       outputFormatter.writeProgress({ type: 'complete', data: {} });
 
@@ -209,6 +242,8 @@ export async function handleChatCommand(
             type: 'tool_call',
             data: { name: toolCall.name, arguments: toolCall.arguments },
           });
+
+          await outputFormatter.logToolCall(toolCall.name, toolCall.arguments);
 
           try {
             const result = await toolRegistry.execute(
@@ -224,11 +259,14 @@ export async function handleChatCommand(
             };
 
             messages.push(toolResultMessage);
+            newMessages.push(toolResultMessage);
 
             outputFormatter.writeProgress({
               type: 'tool_result',
               data: result,
             });
+
+            await outputFormatter.logToolResult(toolCall.name, result);
           } catch (error) {
             const errorMessage: Message = {
               role: 'tool',
@@ -238,11 +276,14 @@ export async function handleChatCommand(
             };
 
             messages.push(errorMessage);
+            newMessages.push(errorMessage);
 
             outputFormatter.writeProgress({
               type: 'tool_result',
               data: { error: String(error) },
             });
+
+            await outputFormatter.logToolResult(toolCall.name, { error: String(error) });
           }
         }
 
@@ -254,14 +295,15 @@ export async function handleChatCommand(
       }
     }
 
-    // Save session if not disabled
+    // Save session if not disabled — only append new messages from this invocation
     // Commander.js parses --no-append as options.append = false
     if (options.append !== false && sessionManager.getSessionPath()) {
-      await sessionManager.appendMessages(messages);
+      await sessionManager.appendMessages(newMessages);
     }
 
   } catch (error) {
     if (error instanceof PAIError) {
+      await outputFormatter.logError(error);
       outputFormatter.writeError(error);
       process.exit(error.exitCode);
     } else {
@@ -270,6 +312,7 @@ export async function handleChatCommand(
         2,
         { originalError: String(error) }
       );
+      await outputFormatter.logError(paiError);
       outputFormatter.writeError(paiError);
       process.exit(2);
     }

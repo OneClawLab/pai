@@ -1,5 +1,5 @@
 {
-  "name": "main",
+  "name": "pai-cli",
   "type": "module",
   "version": "1.0.0",
   "description": "pai is a linux command to interact with LLMs (with only one bash_exec tool and basic session support).",
@@ -11,6 +11,7 @@
     "dev": "tsup --watch --onSuccess 'node dist/index.js'",
     "build": "tsup",
     "test": "vitest",
+    "test:coverage": "vitest run --coverage",
     "release:local": "npm run build && npm link"
   },
   "keywords": [],

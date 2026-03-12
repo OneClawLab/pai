@@ -89,13 +89,13 @@ JSON 输出字段：
 用途：提交一次人机对话请求(可内含多轮tool call)，支持 stdin/pipe、session file 和流式输出。
 
 语法：
-- `pai chat [prompt] --model <name> [flags...]`
+- `pai chat [prompt] [--model <name>] [flags...]`
 
 核心参数：
-- `--model <name>`（必填，必须是已配置模型）
+- `--model <name>`（可选；未指定时使用 provider 配置的 defaultModel，若无 defaultModel 则使用 models 列表第一个；均无则报错）
 - `--model_params '<json-string>'` 或 `--model_params_file <path>`
 - `--system_instruction_text <text>` 或 `--system_instruction_file <path>`（二选一）
-- `--user_input_text <text>` 或 `--user_input_file <path>`（二选一）
+- `--user_input_text <text>`（即位置参数 `[prompt]`）或 `--user_input_file <path>`（即 `--input-file`）（二选一）
 - `--session_file <path>`
 - `--no-append`（禁用本轮结果回写 session）
 - `--stream`
@@ -146,9 +146,15 @@ stdin 行为（必须一致）：
   无 --json 时，输出为人类可读的文本行事件流。
 
 ### 流式/非流式
+`--stream` 参数主要影响：
+1. 内部调用 LLM 时是否使用流式 API；
+2. stderr 进度事件是否实时输出。
+
+stdout 始终以流式方式写出（`process.stdout.write`）。当 LLM 以流式返回时，stdout 为真流式；当 LLM 以非流式返回时，stdout 为"假流式"（一次性写出完整内容）。这不影响调用者行为，因为 stdout 本身不像文件可以一次性读完——调用者总是需要读取到 EOF。
+
 无 --stream 参数时，为非流式调用:
   stderr 将在特定的时间点，按事件输出进度信息。
-  stdout 将在正常结束时一次性输出整个模型响应的结果。
+  stdout 输出模型响应的结果。
 有 --stream 参数时，为流式调用:
   stderr 同上，将在特定的时间点，按事件输出进度信息。
   stdout 将会流式输出模型响应的结果。
@@ -207,10 +213,10 @@ JSON Schema（简化示例）：
 
 错误输出约定：
 - 默认（无 `--json`）：人类可读错误写入 `stderr`。
-- `--json`：输出单个错误 JSON 对象到 `stderr`，`stdout` 不输出成功结果体。
+- `--json`：输出错误事件到 `stderr`（与其他事件相同的 NDJSON shape），`stdout` 不输出成功结果体。
 
-错误对象结构：
-`{ "code": string, "message": string, "detail": object|null, "trace_id": string|null }`
+错误事件结构（与所有 stderr 事件统一 shape）：
+`{ "type": "error", "message": string, "context": object|null, "timestamp": number }`
 
 ## 可观测性与调试
 标准参数：

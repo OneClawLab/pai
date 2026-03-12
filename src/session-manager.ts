@@ -1,4 +1,4 @@
-import { readFile, writeFile, appendFile } from 'node:fs/promises';
+import { writeFile, appendFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { createReadStream } from 'node:fs';
 import { createInterface } from 'node:readline';
@@ -6,7 +6,7 @@ import type { Message, ExitCode } from './types.js';
 import { PAIError } from './types.js';
 
 export class SessionManager {
-  private sessionPath?: string;
+  private sessionPath: string | undefined;
 
   constructor(sessionPath?: string) {
     this.sessionPath = sessionPath;

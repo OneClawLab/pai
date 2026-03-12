@@ -21,7 +21,7 @@ Priority: P0 (blocking/broken) → P1 (important gap) → P2 (quality/polish) �
 **DECISION**
 keep for future
 
-### 2. Error Object Format Doesn't Match SPEC
+### ~~2. Error Object Format Doesn't Match SPEC~~
 
 **WHY:** SPEC defines error JSON as `{ code, message, detail, trace_id }`. Current `OutputFormatter.writeError()` emits `{ type, message, context }` — a completely different shape. Any downstream tooling relying on the SPEC contract will break.
 
@@ -34,7 +34,9 @@ keep for future
 **DECISION**
 修改 SPEC，使之符合目前的实现，stderr里输出的最好都是shape一样的，我们把 { type, message, context } 这种 shape里的 type 扩展一个 "error" 值就可以了。
 
-### 3. Non-Streaming Mode Writes Incrementally to stdout
+**STATUS:** ✅ Done — SPEC updated to use unified `{ type, message, context, timestamp }` shape with `type: "error"`.
+
+### ~~3. Non-Streaming Mode Writes Incrementally to stdout~~
 
 **WHY:** SPEC says "无 `--stream` 参数时 … stdout 将在正常结束时一次性输出整个模型响应的结果". But `chat.ts` non-streaming path calls `outputFormatter.writeModelOutput(response.content)` which does `process.stdout.write(content)` — same incremental write as streaming. If content arrives in one chunk today it works by accident, but the contract is violated.
 
@@ -48,7 +50,9 @@ keep for future
 --stream 参数主要影响: 内部调用LLM时是否用stream模式，往stderr输出时是否流式。
 stdout的输出流式没问题(如果模型流式输出， stdout就是真流式，如果模型输出不是流式，stdout就是假流式)，反正不影响调用者的行为(因为stdout本就不像文件，可以一次性读完)。
 
-### 4. Session Append Saves ALL Messages (Including Pre-existing)
+**STATUS:** ✅ Done — SPEC updated to clarify stdout always writes via `process.stdout.write`.
+
+### ~~4. Session Append Saves ALL Messages (Including Pre-existing)~~
 
 **WHY:** `chat.ts` calls `sessionManager.appendMessages(messages)` where `messages` is the full array including messages loaded from the session file. This duplicates the entire history every turn. Should only append new messages.
 
@@ -59,6 +63,8 @@ stdout的输出流式没问题(如果模型流式输出， stdout就是真流式
 
 **DECISION**
 需要FIX。
+
+**STATUS:** ✅ Done — `chat.ts` now tracks `newMessages[]` separately and only appends new messages to session file. Test added.
 
 ## P1 — Important Gaps
 
@@ -75,7 +81,7 @@ stdout的输出流式没问题(如果模型流式输出， stdout就是真流式
 **DECISION**
 keep for future
 
-### 6. Log File Missing Tool Call Details and Request Summary
+### ~~6. Log File Missing Tool Call Details and Request Summary~~
 
 **WHY:** SPEC requires log to contain "请求参数摘要、关键事件、错误信息、结果摘要". Current log only records user/assistant/system text. Tool calls, tool results, model name, provider, temperature — none of these are logged.
 
@@ -88,7 +94,9 @@ keep for future
 **DECISION**
 需要FIX。
 
-### 7. `--model` Is Optional in Code but SPEC Says Required for Chat
+**STATUS:** ✅ Done — Added `logRequestSummary`, `logToolCall`, `logToolResult`, `logError` to `OutputFormatter`. Wired into `chat.ts`.
+
+### ~~7. `--model` Is Optional in Code but SPEC Says Required for Chat~~
 
 **WHY:** SPEC syntax shows `--model <name>` as required for chat. Implementation falls back to `provider.defaultModel || provider.models?.[0]`. This is arguably better UX, but it's a SPEC deviation. Either update SPEC or enforce it.
 
@@ -98,6 +106,8 @@ keep for future
 
 **DECISION**
 需要更改相应的SPEC描述。
+
+**STATUS:** ✅ Done — SPEC updated: `--model <name>` is now documented as optional with defaultModel fallback.
 
 ### 8. No Tests for OAuth Login Flow
 
@@ -113,7 +123,7 @@ keep for future
 **DECISION**
 keep for future
 
-### 9. No Tests for Tool Calling Loop in Chat
+### ~~9. No Tests for Tool Calling Loop in Chat~~
 
 **WHY:** The multi-turn tool calling loop in `chat.ts` (LLM → bash_exec → LLM → …) is the core differentiator of PAI. It's tested only at integration level with full mocks. No unit-level test verifies: max iteration guard, error tool results fed back, session append correctness after tool calls.
 
@@ -127,7 +137,9 @@ keep for future
 **DECISION**
 需要FIX。
 
-### 10. No Tests for Image/Multimodal End-to-End
+**STATUS:** ✅ Done — Added 3 tests: multi-turn tool calls, max iteration guard, tool error capture.
+
+### ~~10. No Tests for Image/Multimodal End-to-End~~
 
 **WHY:** `--image` is fully wired but never tested beyond `input-resolver.test.ts` unit tests. No test verifies that an image flows from CLI → InputResolver → LLMClient → pi-ai correctly.
 
@@ -139,7 +151,9 @@ keep for future
 **DECISION**
 需要FIX。
 
-### 11. TypeScript Strict Mode Issues
+**STATUS:** ✅ Done — Added 2 tests: image content passthrough to LLM, multimodal session file preservation.
+
+### ~~11. TypeScript Strict Mode Issues~~
 
 **WHY:** Multiple `exactOptionalPropertyTypes` errors visible in `chat.ts` and `session-manager.ts`. These are real type-safety gaps — passing `undefined` where the type doesn't allow it.
 
@@ -151,6 +165,8 @@ keep for future
 
 **DECISION**
 需要FIX。
+
+**STATUS:** ✅ Done — Added `| undefined` to optional properties in `LLMClientConfig` and `InputSource`. Removed unused `readFile` import from `session-manager.ts`. Fixed `sessionPath` type. All diagnostics clean.
 
 ### 12. Bedrock / Vertex Credential Handling
 
@@ -233,7 +249,7 @@ need discuss later
 **DECISION**
 need discuss later
 
-### 18. `package.json` Name Is "main"
+### ~~18. `package.json` Name Is "main"~~
 
 **WHY:** Package name is literally `"main"`. If published to npm, this would conflict. Even locally, `npm link` creates a confusing global `main` command alongside `pai`.
 
@@ -245,7 +261,9 @@ need discuss later
 **DECISION**
 需要fix。
 
-### 19. Test Coverage Reporting Not Wired
+**STATUS:** ✅ Done — Renamed to `"pai-cli"`.
+
+### ~~19. Test Coverage Reporting Not Wired~~
 
 **WHY:** `vitest.config.ts` has coverage configuration but `package.json` has no `test:coverage` script. Coverage is configured but never actually run.
 
@@ -257,9 +275,11 @@ need discuss later
 **DECISION**
 需要fix。
 
+**STATUS:** ✅ Done — Added `"test:coverage": "vitest run --coverage"` to package.json.
+
 ## P3 — Nice-to-Have
 
-### 20. `--user_input_text` / `--user_input_file` SPEC Aliases
+### ~~20. `--user_input_text` / `--user_input_file` SPEC Aliases~~
 
 **WHY:** SPEC mentions `--user_input_text <text>` and `--user_input_file <path>` as parameter names, but implementation uses positional `[prompt]` and `--input-file`. Not a bug per se (SPEC could be updated), but worth aligning.
 
@@ -270,7 +290,9 @@ need discuss later
 **DECISION**
 需要fix(改SPEC使之符合实现)。
 
-### 21. `model config --add` Doesn't Validate `--set` Keys
+**STATUS:** ✅ Done — SPEC updated: `--user_input_text` mapped to positional `[prompt]`, `--user_input_file` mapped to `--input-file`.
+
+### ~~21. `model config --add` Doesn't Validate `--set` Keys~~
 
 **WHY:** Users can `--set anyRandomKey=value` and it gets stored. No validation that the key is meaningful for the provider. Typos like `--set apikey=xxx` (lowercase) silently fail.
 
@@ -282,7 +304,9 @@ need discuss later
 **DECISION**
 需要fix。
 
-### 22. No `model config --show` Command
+**STATUS:** ✅ Done — Added known key validation with warnings to stderr. Supports nested keys (e.g. `providerOptions.azureApiVersion`).
+
+### ~~22. No `model config --show` Command~~
 
 **WHY:** Users can list all providers but can't inspect a single provider's full configuration (minus secrets). Useful for debugging.
 
@@ -294,7 +318,9 @@ need discuss later
 **DECISION**
 需要fix，另外 pai model config 和 pai model list 的输出都加一个输出当前配置文件全路径。
 
-### 23. No `--version` for Subcommands
+**STATUS:** ✅ Done — Added `--show` with sensitive field masking, `--json` support. Config file path shown in `model list` (stdout for human, stderr for JSON) and `model config` (stderr).
+
+### ~~23. No `--version` for Subcommands~~
 
 **WHY:** `pai --version` works (Commander.js), but there's no way to check pi-ai library version or provider API versions. Useful for bug reports.
 
@@ -304,6 +330,8 @@ need discuss later
 
 **DECISION**
 需要fix，就用 pai --version 吧。
+
+**STATUS:** ✅ Done — `pai --version` now shows: `pai <version> (pi-ai <version>, Node <version>)`.
 
 ### 24. E2E Test Script Is Bash-Only
 
@@ -317,7 +345,7 @@ need discuss later
 **DECISION**
 keep for future
 
-### 25. No `--dry-run` or `--explain` Mode
+### ~~25. No `--dry-run` or `--explain` Mode~~
 
 **WHY:** Users may want to see what PAI would do (which provider, model, credentials source) without actually calling the LLM. Useful for debugging configuration.
 
@@ -328,3 +356,5 @@ keep for future
 
 **DECISION**
 需要fix。
+
+**STATUS:** ✅ Done — Added `--dry-run` flag to chat command. Outputs resolved provider/model/config info to stderr and exits without calling LLM. Test added.

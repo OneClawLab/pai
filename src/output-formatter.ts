@@ -9,7 +9,7 @@ import { PAIError } from './types.js';
 export class OutputFormatter {
   private jsonMode: boolean;
   private quietMode: boolean;
-  private logFile?: string;
+  private logFile: string | undefined;
 
   constructor(jsonMode: boolean = false, quietMode: boolean = false, logFile?: string) {
     this.jsonMode = jsonMode;
@@ -146,6 +146,54 @@ export class OutputFormatter {
       await this.appendToLog('system', content).catch(() => {
         // Silently fail
       });
+    }
+  }
+
+  /**
+   * Log request summary (provider, model, parameters)
+   */
+  async logRequestSummary(info: { provider: string; model: string; temperature?: number | undefined; maxTokens?: number | undefined; stream?: boolean | undefined }): Promise<void> {
+    if (this.logFile) {
+      const lines = [
+        `Provider: ${info.provider}`,
+        `Model: ${info.model}`,
+      ];
+      if (info.temperature !== undefined) lines.push(`Temperature: ${info.temperature}`);
+      if (info.maxTokens !== undefined) lines.push(`Max Tokens: ${info.maxTokens}`);
+      if (info.stream) lines.push(`Stream: true`);
+      await this.appendToLog('request', lines.join('\n')).catch(() => {});
+    }
+  }
+
+  /**
+   * Log tool call
+   */
+  async logToolCall(name: string, args: any): Promise<void> {
+    if (this.logFile) {
+      const content = `**Tool:** ${name}\n\`\`\`json\n${JSON.stringify(args, null, 2)}\n\`\`\``;
+      await this.appendToLog('tool_call', content).catch(() => {});
+    }
+  }
+
+  /**
+   * Log tool result
+   */
+  async logToolResult(name: string, result: any): Promise<void> {
+    if (this.logFile) {
+      const content = `**Tool:** ${name}\n\`\`\`json\n${JSON.stringify(result, null, 2)}\n\`\`\``;
+      await this.appendToLog('tool_result', content).catch(() => {});
+    }
+  }
+
+  /**
+   * Log error
+   */
+  async logError(error: Error | PAIError): Promise<void> {
+    if (this.logFile) {
+      const detail = error instanceof PAIError && error.context
+        ? `\n\nContext: ${JSON.stringify(error.context)}`
+        : '';
+      await this.appendToLog('error', `${error.message}${detail}`).catch(() => {});
     }
   }
 }
