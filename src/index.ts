@@ -67,7 +67,6 @@ modelCommand
   .option('--delete', 'Delete provider')
   .option('--name <name>', 'Provider name')
   .option('--provider <type>', 'Provider type')
-  .option('--secret-file <path>', 'Secret file path')
   .option('--set <key=value...>', 'Set configuration values')
   .action(async (options: ModelConfigOptions) => {
     await handleModelConfig(options);

@@ -517,7 +517,6 @@ Configure providers (add/update/delete).
 - `--name <name>` - Provider name
 - `--provider <type>` - Provider type
 - `--set <key=value...>` - Set configuration values
-- `--secret-file <path>` - Secret file path
 
 ### `pai model login`
 

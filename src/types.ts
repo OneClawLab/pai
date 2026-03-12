@@ -139,7 +139,6 @@ export interface ModelConfigOptions extends CLIOptions {
   all?: boolean;
   name?: string;
   provider?: string;
-  secretFile?: string;
   set?: string[];
 }
 

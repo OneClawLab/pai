@@ -41,9 +41,11 @@ PAI 同时提供两类输出：
 - provider 配置至少包含：`name`、`provider`、认证信息引用（不要求明文）。
 
 ### 凭证来源优先级
-1. CLI 参数（如 `--secret-file`）
+1. CLI 参数（如 `--set apiKey=...`）
 2. 环境变量
 3. 配置文件
+
+> **TODO:** 当前凭证以明文存储在配置文件中。未来考虑集成 OS keyring、1Password CLI 等统一 secret management 方案，而非仅针对单个参数做文件读取。
 
 ## CLI 命令规范
 
@@ -64,7 +66,7 @@ JSON 输出字段：
 
 #### `model config --add`
 语法：
-- `pai model config --add --name <name> --provider <provider> [--secret-file <path>] [--set <k>=<v> ...]`
+- `pai model config --add --name <name> --provider <provider> [--set <k>=<v> ...]`
 
 行为：
 - `--add` 同时支持新增或替换同名配置。
@@ -72,7 +74,6 @@ JSON 输出字段：
 参数校验：
 - `--name` 非空；
 - `--provider` 必须在支持列表中；
-- `--secret-file` 存在且可读；
 - `--set` 必须满足 `key=value` 格式。
 
 #### `model config --delete`
