@@ -1,9 +1,23 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { handleModelList, handleModelConfig } from '../../src/commands/model.js';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { handleModelList, handleModelConfig, handleModelLogin } from '../../src/commands/model.js';
+import { mkdtemp, rm, writeFile, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import * as fc from 'fast-check';
+
+// Mock @mariozechner/pi-ai/oauth for OAuth login tests
+vi.mock('@mariozechner/pi-ai/oauth', () => ({
+  getOAuthProviders: vi.fn(),
+  getOAuthProvider: vi.fn(),
+}));
+
+// Mock node:readline for OAuth login tests
+vi.mock('node:readline', () => ({
+  createInterface: vi.fn(() => ({
+    question: vi.fn((_msg: string, cb: (answer: string) => void) => cb('test-input')),
+    close: vi.fn(),
+  })),
+}));
 
 describe('Model Commands', () => {
   let tempDir: string;
@@ -308,6 +322,248 @@ describe('Model Commands', () => {
         ),
         { numRuns: 50 }
       );
+    });
+  });
+
+  describe('handleModelLogin', () => {
+    let mockGetOAuthProvider: any;
+    let mockGetOAuthProviders: any;
+
+    beforeEach(async () => {
+      const oauthModule = await import('@mariozechner/pi-ai/oauth');
+      mockGetOAuthProvider = vi.mocked(oauthModule.getOAuthProvider);
+      mockGetOAuthProviders = vi.mocked(oauthModule.getOAuthProviders);
+    });
+
+    afterEach(() => {
+      mockGetOAuthProvider.mockReset();
+      mockGetOAuthProviders.mockReset();
+    });
+
+    it('should error when --name is missing', async () => {
+      await handleModelLogin({ config: configPath });
+
+      expect(processExitSpy).toHaveBeenCalledWith(1);
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Provider name is required')
+      );
+    });
+
+    it('should error for non-OAuth provider', async () => {
+      mockGetOAuthProviders.mockReturnValue([{ id: 'github-copilot', name: 'GitHub Copilot' }]);
+      mockGetOAuthProvider.mockReturnValue(null);
+
+      await handleModelLogin({ config: configPath, name: 'openai' });
+
+      expect(processExitSpy).toHaveBeenCalledWith(1);
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        expect.stringContaining('does not support OAuth login')
+      );
+    });
+
+    it('should login successfully and save credentials to config', async () => {
+      const mockCredentials = {
+        refresh: 'refresh-token-123',
+        access: 'access-token-456',
+        expires: Date.now() + 3600000,
+      };
+
+      mockGetOAuthProviders.mockReturnValue([{ id: 'github-copilot', name: 'GitHub Copilot' }]);
+      mockGetOAuthProvider.mockReturnValue({
+        name: 'GitHub Copilot',
+        login: vi.fn().mockResolvedValue(mockCredentials),
+      });
+
+      await handleModelLogin({ config: configPath, name: 'github-copilot' });
+
+      // Should not have exited with error
+      expect(processExitSpy).not.toHaveBeenCalled();
+
+      // Verify credentials saved to config file
+      const savedConfig = JSON.parse(await readFile(configPath, 'utf-8'));
+      const provider = savedConfig.providers.find((p: any) => p.name === 'github-copilot');
+      expect(provider).toBeDefined();
+      expect(provider.oauth.refresh).toBe('refresh-token-123');
+      expect(provider.oauth.access).toBe('access-token-456');
+      expect(provider.oauth.expires).toBe(mockCredentials.expires);
+    });
+
+    it('should merge OAuth credentials into existing provider config', async () => {
+      // Pre-existing provider config
+      const config = {
+        schema_version: '1.0.0',
+        providers: [
+          { name: 'github-copilot', defaultModel: 'gpt-4o', models: ['gpt-4o'] },
+        ],
+      };
+      await writeFile(configPath, JSON.stringify(config), 'utf-8');
+
+      const mockCredentials = {
+        refresh: 'new-refresh',
+        access: 'new-access',
+        expires: Date.now() + 7200000,
+      };
+
+      mockGetOAuthProviders.mockReturnValue([{ id: 'github-copilot', name: 'GitHub Copilot' }]);
+      mockGetOAuthProvider.mockReturnValue({
+        name: 'GitHub Copilot',
+        login: vi.fn().mockResolvedValue(mockCredentials),
+      });
+
+      await handleModelLogin({ config: configPath, name: 'github-copilot' });
+
+      const savedConfig = JSON.parse(await readFile(configPath, 'utf-8'));
+      const provider = savedConfig.providers.find((p: any) => p.name === 'github-copilot');
+
+      // Existing fields preserved
+      expect(provider.defaultModel).toBe('gpt-4o');
+      expect(provider.models).toEqual(['gpt-4o']);
+      // OAuth credentials added
+      expect(provider.oauth.refresh).toBe('new-refresh');
+      expect(provider.oauth.access).toBe('new-access');
+    });
+
+    it('should store extra credential fields from OAuth provider', async () => {
+      const mockCredentials = {
+        refresh: 'r-token',
+        access: 'a-token',
+        expires: Date.now() + 3600000,
+        enterpriseUrl: 'https://github.example.com',
+        accountId: 'acc-123',
+      };
+
+      mockGetOAuthProviders.mockReturnValue([{ id: 'github-copilot', name: 'GitHub Copilot' }]);
+      mockGetOAuthProvider.mockReturnValue({
+        name: 'GitHub Copilot',
+        login: vi.fn().mockResolvedValue(mockCredentials),
+      });
+
+      await handleModelLogin({ config: configPath, name: 'github-copilot' });
+
+      const savedConfig = JSON.parse(await readFile(configPath, 'utf-8'));
+      const provider = savedConfig.providers.find((p: any) => p.name === 'github-copilot');
+
+      expect(provider.oauth.enterpriseUrl).toBe('https://github.example.com');
+      expect(provider.oauth.accountId).toBe('acc-123');
+    });
+
+    it('should call login with onAuth, onPrompt, onProgress callbacks', async () => {
+      const loginFn = vi.fn().mockResolvedValue({
+        refresh: 'r', access: 'a', expires: Date.now() + 3600000,
+      });
+
+      mockGetOAuthProviders.mockReturnValue([{ id: 'test-oauth', name: 'Test OAuth' }]);
+      mockGetOAuthProvider.mockReturnValue({
+        name: 'Test OAuth',
+        login: loginFn,
+      });
+
+      await handleModelLogin({ config: configPath, name: 'test-oauth' });
+
+      expect(loginFn).toHaveBeenCalledTimes(1);
+      const callArgs = loginFn.mock.calls[0][0];
+      expect(callArgs).toHaveProperty('onAuth');
+      expect(callArgs).toHaveProperty('onPrompt');
+      expect(callArgs).toHaveProperty('onProgress');
+      expect(typeof callArgs.onAuth).toBe('function');
+      expect(typeof callArgs.onPrompt).toBe('function');
+      expect(typeof callArgs.onProgress).toBe('function');
+    });
+  });
+
+  describe('resolveOAuthCredentials (via ConfigurationManager)', () => {
+    it('should use access token when not expired', async () => {
+      const { ConfigurationManager } = await import('../../src/config-manager.js');
+
+      const config = {
+        schema_version: '1.0.0',
+        providers: [{
+          name: 'github-copilot',
+          oauth: {
+            refresh: 'r-token',
+            access: 'a-token',
+            expires: Date.now() + 3600000, // 1 hour from now
+          },
+        }],
+      };
+      await writeFile(configPath, JSON.stringify(config), 'utf-8');
+
+      // Mock getOAuthProvider to return a provider with getApiKey
+      const oauthModule = await import('@mariozechner/pi-ai/oauth');
+      vi.mocked(oauthModule.getOAuthProvider).mockReturnValue({
+        name: 'GitHub Copilot',
+        getApiKey: vi.fn().mockReturnValue('derived-api-key'),
+      } as any);
+
+      const cm = new ConfigurationManager({ config: configPath });
+      const key = await cm.resolveCredentials('github-copilot');
+
+      expect(key).toBe('derived-api-key');
+    });
+
+    it('should refresh expired token and save new credentials', async () => {
+      const { ConfigurationManager } = await import('../../src/config-manager.js');
+
+      const config = {
+        schema_version: '1.0.0',
+        providers: [{
+          name: 'github-copilot',
+          oauth: {
+            refresh: 'old-refresh',
+            access: 'expired-access',
+            expires: Date.now() - 1000, // Already expired
+          },
+        }],
+      };
+      await writeFile(configPath, JSON.stringify(config), 'utf-8');
+
+      const oauthModule = await import('@mariozechner/pi-ai/oauth');
+      vi.mocked(oauthModule.getOAuthProvider).mockReturnValue({
+        name: 'GitHub Copilot',
+        refreshToken: vi.fn().mockResolvedValue({
+          refresh: 'new-refresh',
+          access: 'new-access',
+          expires: Date.now() + 3600000,
+        }),
+        getApiKey: vi.fn().mockReturnValue('refreshed-api-key'),
+      } as any);
+
+      const cm = new ConfigurationManager({ config: configPath });
+      const key = await cm.resolveCredentials('github-copilot');
+
+      expect(key).toBe('refreshed-api-key');
+
+      // Verify new credentials were persisted
+      const savedConfig = JSON.parse(await readFile(configPath, 'utf-8'));
+      const provider = savedConfig.providers.find((p: any) => p.name === 'github-copilot');
+      expect(provider.oauth.refresh).toBe('new-refresh');
+      expect(provider.oauth.access).toBe('new-access');
+    });
+
+    it('should fall back to raw access token when getApiKey unavailable', async () => {
+      const { ConfigurationManager } = await import('../../src/config-manager.js');
+
+      const config = {
+        schema_version: '1.0.0',
+        providers: [{
+          name: 'unknown-oauth',
+          oauth: {
+            refresh: 'r',
+            access: 'raw-access-token',
+            expires: Date.now() + 3600000,
+          },
+        }],
+      };
+      await writeFile(configPath, JSON.stringify(config), 'utf-8');
+
+      // getOAuthProvider returns null — no provider-specific logic
+      const oauthModule = await import('@mariozechner/pi-ai/oauth');
+      vi.mocked(oauthModule.getOAuthProvider).mockReturnValue(null);
+
+      const cm = new ConfigurationManager({ config: configPath });
+      const key = await cm.resolveCredentials('unknown-oauth');
+
+      expect(key).toBe('raw-access-token');
     });
   });
 });
