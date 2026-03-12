@@ -25,6 +25,16 @@ export interface ProviderConfig {
   contextWindow?: number;
   /** Provider-specific options (e.g. azureApiVersion, azureDeploymentName) */
   providerOptions?: Record<string, any>;
+  /** OAuth credentials (for OAuth-based providers like github-copilot, anthropic, etc.) */
+  oauth?: OAuthCredentialStore;
+}
+
+export interface OAuthCredentialStore {
+  refresh: string;
+  access: string;
+  expires: number;
+  /** Extra provider-specific fields (e.g. enterpriseUrl, projectId, accountId) */
+  [key: string]: unknown;
 }
 
 export interface PAIConfig {

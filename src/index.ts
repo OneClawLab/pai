@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { handleChatCommand } from './commands/chat.js';
-import { handleModelList, handleModelConfig } from './commands/model.js';
+import { handleModelList, handleModelConfig, handleModelLogin } from './commands/model.js';
 import type { ChatOptions, ModelConfigOptions } from './types.js';
 
 // Get package.json info for version
@@ -71,6 +71,16 @@ modelCommand
   .option('--set <key=value...>', 'Set configuration values')
   .action(async (options: ModelConfigOptions) => {
     await handleModelConfig(options);
+  });
+
+// Model login command (OAuth providers)
+modelCommand
+  .command('login')
+  .description('Login to an OAuth provider (github-copilot, anthropic, google-gemini-cli, etc.)')
+  .option('--config <path>', 'Config file path')
+  .option('--name <name>', 'Provider name')
+  .action(async (options: ModelConfigOptions) => {
+    await handleModelLogin(options);
   });
 
 // Error handling for unknown commands

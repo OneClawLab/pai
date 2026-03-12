@@ -7,16 +7,6 @@ import { PAIError } from './types.js';
 
 const DEFAULT_SCHEMA_VERSION = '1.0.0';
 
-interface AuthFile {
-  [provider: string]: {
-    type: 'oauth' | 'api_key';
-    access?: string;
-    refresh?: string;
-    expires?: number;
-    apiKey?: string;
-  };
-}
-
 export class ConfigurationManager {
   private configPath: string;
 
@@ -210,7 +200,7 @@ export class ConfigurationManager {
 
   /**
    * Resolve credentials for a provider
-   * Priority: CLI param > env var > config file > auth.json
+   * Priority: CLI param > env var > config file (apiKey or oauth)
    */
   async resolveCredentials(
     provider: string,
@@ -228,20 +218,24 @@ export class ConfigurationManager {
       return envKey;
     }
 
-    // 3. Check config file
+    // 3. Check config file (apiKey or OAuth credentials)
     try {
       const providerConfig = await this.getProvider(provider);
+
+      // 3a. Direct API key
       if (providerConfig.apiKey) {
         return providerConfig.apiKey;
       }
-    } catch {
-      // Provider not in config, continue to auth.json
-    }
 
-    // 4. Check auth.json for OAuth credentials
-    const authKey = await this.loadAuthFile(provider);
-    if (authKey) {
-      return authKey;
+      // 3b. OAuth credentials stored in config
+      if (providerConfig.oauth) {
+        const oauthApiKey = await this.resolveOAuthCredentials(providerConfig);
+        if (oauthApiKey) {
+          return oauthApiKey;
+        }
+      }
+    } catch {
+      // Provider not in config
     }
 
     throw new PAIError(
@@ -249,45 +243,57 @@ export class ConfigurationManager {
       1 as ExitCode,
       {
         provider,
-        checkedSources: ['CLI parameter', 'environment variable', 'config file', 'auth.json'],
+        checkedSources: ['CLI parameter', 'environment variable', 'config file'],
       }
     );
   }
 
   /**
-   * Load credentials from auth.json file (pi-ai format)
+   * Resolve OAuth credentials from provider config.
+   * Automatically refreshes expired tokens and saves updated credentials.
    */
-  private async loadAuthFile(provider: string): Promise<string | null> {
-    // Check for auth.json in current directory
-    const authPath = join(process.cwd(), 'auth.json');
-
-    if (!existsSync(authPath)) {
+  private async resolveOAuthCredentials(
+    providerConfig: ProviderConfig
+  ): Promise<string | null> {
+    const oauth = providerConfig.oauth;
+    if (!oauth || !oauth.access) {
       return null;
     }
 
+    // Check if token is expired
+    if (oauth.expires && Date.now() >= oauth.expires) {
+      // Try to refresh the token
+      try {
+        const { getOAuthProvider } = await import('@mariozechner/pi-ai/oauth');
+        const oauthProvider = getOAuthProvider(providerConfig.name);
+        if (oauthProvider) {
+          const newCredentials = await oauthProvider.refreshToken(oauth as any);
+          // Update config with refreshed credentials
+          providerConfig.oauth = {
+            ...oauth,
+            refresh: newCredentials.refresh,
+            access: newCredentials.access,
+            expires: newCredentials.expires,
+          };
+          await this.addProvider(providerConfig);
+          return oauthProvider.getApiKey(providerConfig.oauth as any);
+        }
+      } catch {
+        // Refresh failed, return existing token (may still work)
+      }
+    }
+
+    // Use getApiKey if available (some providers encode extra fields)
     try {
-      const content = await readFile(authPath, 'utf-8');
-      const auth = JSON.parse(content) as AuthFile;
-
-      const providerAuth = auth[provider];
-      if (!providerAuth) {
-        return null;
+      const { getOAuthProvider } = await import('@mariozechner/pi-ai/oauth');
+      const oauthProvider = getOAuthProvider(providerConfig.name);
+      if (oauthProvider) {
+        return oauthProvider.getApiKey(oauth as any);
       }
-
-      // For OAuth providers, return the access token
-      if (providerAuth.type === 'oauth' && providerAuth.access) {
-        return providerAuth.access;
-      }
-
-      // For API key providers
-      if (providerAuth.apiKey) {
-        return providerAuth.apiKey;
-      }
-
-      return null;
     } catch {
-      // If auth.json is malformed or unreadable, ignore it
-      return null;
+      // Fall back to raw access token
     }
+
+    return oauth.access;
   }
 }

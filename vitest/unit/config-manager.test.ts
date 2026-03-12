@@ -493,28 +493,27 @@ describe('ConfigurationManager', () => {
       }
     });
 
-    it('should use auth.json when other sources not available', async () => {
-      const authPath = join(tempDir, 'auth.json');
-      const authData = {
-        'github-copilot': {
-          type: 'oauth',
-          access: 'auth-token',
-          expires: Date.now() + 10000,
-        },
+    it('should use oauth credentials from config when other sources not available', async () => {
+      // Write a config with OAuth credentials
+      const config = {
+        schema_version: '1.0.0',
+        providers: [
+          {
+            name: 'github-copilot',
+            oauth: {
+              refresh: 'ghu_test',
+              access: 'auth-token',
+              expires: Date.now() + 3600000,
+            },
+          },
+        ],
       };
-      await writeFile(authPath, JSON.stringify(authData), 'utf-8');
-
-      // Change working directory to tempDir for this test
-      const originalCwd = process.cwd();
-      process.chdir(tempDir);
+      await writeFile(configPath, JSON.stringify(config), 'utf-8');
 
       const manager = new ConfigurationManager({ config: configPath });
       const creds = await manager.resolveCredentials('github-copilot');
 
       expect(creds).toBe('auth-token');
-
-      // Restore
-      process.chdir(originalCwd);
     });
 
     it('should throw PAIError with exit code 1 when no credentials found', async () => {
@@ -706,7 +705,7 @@ describe('ConfigurationManager', () => {
     });
 
     // Feature: pai-cli-tool, Property 9: Credential Resolution Priority
-    it('should resolve credentials with correct priority (CLI > env > config > auth.json)', async () => {
+    it('should resolve credentials with correct priority (CLI > env > config)', async () => {
       await fc.assert(
         fc.asyncProperty(
           fc.record({

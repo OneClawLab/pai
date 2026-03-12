@@ -1,4 +1,6 @@
 import { getProviders, getModels } from '@mariozechner/pi-ai';
+import { getOAuthProvider, getOAuthProviders } from '@mariozechner/pi-ai/oauth';
+import { createInterface } from 'node:readline';
 import type { ModelConfigOptions } from '../types.js';
 import { PAIError } from '../types.js';
 import { ConfigurationManager } from '../config-manager.js';
@@ -168,6 +170,96 @@ export async function handleModelConfig(options: ModelConfigOptions): Promise<vo
       process.exit(error.exitCode);
     } else {
       console.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
+      process.exit(2);
+    }
+  }
+}
+
+
+/**
+ * Handle model login command (OAuth providers)
+ */
+export async function handleModelLogin(options: ModelConfigOptions): Promise<void> {
+  const configManager = new ConfigurationManager(options);
+
+  try {
+    if (!options.name) {
+      throw new PAIError('Provider name is required', 1, {
+        message: 'Use --name <provider-name>',
+      });
+    }
+
+    // Check if this is an OAuth provider
+    const oauthProviders = getOAuthProviders();
+    const oauthProvider = getOAuthProvider(options.name);
+
+    if (!oauthProvider) {
+      const oauthIds = oauthProviders.map((p) => p.id).join(', ');
+      throw new PAIError(
+        `Provider "${options.name}" does not support OAuth login`,
+        1,
+        { message: `OAuth providers: ${oauthIds}` }
+      );
+    }
+
+    const rl = createInterface({ input: process.stdin, output: process.stdout });
+    const prompt = (msg: string): Promise<string> =>
+      new Promise((resolve) => rl.question(`${msg} `, resolve));
+
+    try {
+      console.log(`Logging in to ${oauthProvider.name}...`);
+
+      const credentials = await oauthProvider.login({
+        onAuth: (info) => {
+          console.log(`\nOpen this URL in your browser:\n${info.url}`);
+          if (info.instructions) console.log(info.instructions);
+          console.log();
+        },
+        onPrompt: async (p) => {
+          return await prompt(
+            `${p.message}${p.placeholder ? ` (${p.placeholder})` : ''}:`
+          );
+        },
+        onProgress: (msg) => console.log(msg),
+      });
+
+      // Load existing provider config or create new one
+      let providerConfig;
+      try {
+        providerConfig = await configManager.getProvider(options.name);
+      } catch {
+        providerConfig = { name: options.name };
+      }
+
+      // Store OAuth credentials in the provider config
+      providerConfig.oauth = {
+        refresh: credentials.refresh,
+        access: credentials.access,
+        expires: credentials.expires,
+        ...(Object.fromEntries(
+          Object.entries(credentials).filter(
+            ([k]) => !['refresh', 'access', 'expires'].includes(k)
+          )
+        )),
+      };
+
+      await configManager.addProvider(providerConfig);
+
+      console.log(`\nProvider "${options.name}" logged in and credentials saved to config.`);
+    } finally {
+      rl.close();
+    }
+  } catch (error) {
+    if (error instanceof PAIError) {
+      console.error(`Error: ${error.message}`);
+      if (error.context) {
+        console.error(`Context: ${JSON.stringify(error.context)}`);
+      }
+      process.exit(error.exitCode);
+    } else {
+      console.error(
+        `Error: ${error instanceof Error ? error.message : String(error)}`
+      );
       process.exit(2);
     }
   }
