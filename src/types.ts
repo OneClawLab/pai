@@ -137,6 +137,7 @@ export interface ChatOptions extends CLIOptions {
   log?: string;
   append?: boolean; // Commander.js: --no-append sets this to false
   dryRun?: boolean;
+  maxTurns?: number; // Max tool-call turns
 }
 
 export interface ModelConfigOptions extends CLIOptions {

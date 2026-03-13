@@ -619,7 +619,7 @@ describe('Integration Tests', () => {
       expect(stdoutSpy).toHaveBeenCalledWith('Done');
     });
 
-    it('should respect max iteration guard', async () => {
+    it('should respect max turns guard', async () => {
       const config = {
         schema_version: '1.0.0',
         defaultProvider: 'test',
@@ -628,7 +628,7 @@ describe('Integration Tests', () => {
       await writeFile(configPath, JSON.stringify(config), 'utf-8');
 
       const { complete } = await import('@mariozechner/pi-ai');
-      // Always return tool calls — should stop after 10 iterations
+      // Always return tool calls — should stop after maxTurns
       vi.mocked(complete).mockImplementation(async () => ({
         role: 'assistant',
         content: [
@@ -640,10 +640,10 @@ describe('Integration Tests', () => {
         timestamp: Date.now(),
       } as any));
 
-      await handleChatCommand('Loop forever', { config: configPath });
+      await handleChatCommand('Loop forever', { config: configPath, maxTurns: 3 });
 
-      // Max 10 iterations + initial = at most 11, but loop guard is 10
-      expect(vi.mocked(complete).mock.calls.length).toBeLessThanOrEqual(10);
+      // maxTurns: 3, plus one final round = at most 5 calls
+      expect(vi.mocked(complete).mock.calls.length).toBeLessThanOrEqual(5);
     });
 
     it('should capture tool errors as tool result messages', async () => {

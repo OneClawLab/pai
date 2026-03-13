@@ -2,6 +2,8 @@ import { exec, execSync } from 'node:child_process';
 import { platform } from 'node:os';
 import type { Tool, BashExecArgs, BashExecResult } from '../types.js';
 
+const MAX_STDOUT_LENGTH =10 * 1024 * 1024; // 10MB buffer for large outputs
+
 /**
  * Detect the best available shell.
  *
@@ -117,7 +119,7 @@ export function createBashExecTool(): Tool {
       return new Promise((resolve) => {
         const options: any = {
           shell: shellName,
-          maxBuffer: 10 * 1024 * 1024, // 10MB buffer for large outputs
+          maxBuffer: MAX_STDOUT_LENGTH,
           encoding: 'buffer',
         };
 

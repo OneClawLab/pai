@@ -8,7 +8,7 @@ import { LLMClient } from '../llm-client.js';
 import { ToolRegistry } from '../tool-registry.js';
 import { getModels } from '@mariozechner/pi-ai';
 
-const MAX_ITERATION_LIMIT = 100; // Prevent infinite loops
+const DEFAULT_MAX_TURNS = 100; // Prevent infinite loops
 
 /**
  * Handle the chat command
@@ -190,7 +190,9 @@ export async function handleChatCommand(
 
     // Execute chat with tool calling loop
     let continueLoop = true;
-    let maxIterations = MAX_ITERATION_LIMIT;
+    let maxTurns = options.maxTurns ?? DEFAULT_MAX_TURNS;
+    const turnsLimit = maxTurns; // remember original for messages
+    let finalRoundAttempted = false;
 
     // Compute content lengths for diagnostics
     const systemMsg = messages.find(m => m.role === 'system');
@@ -198,17 +200,17 @@ export async function handleChatCommand(
     const systemChars = systemMsg ? String(systemMsg.content).length : 0;
     const userChars = userMsg ? (typeof userMsg.content === 'string' ? userMsg.content.length : JSON.stringify(userMsg.content).length) : 0;
 
-    while (continueLoop && maxIterations > 0) {
-      maxIterations--;
+    while (continueLoop && maxTurns > 0) {
+      maxTurns--;
 
-      // On the last allowed iteration, withhold tools so the model is
+      // On the last allowed turn, withhold tools so the model is
       // forced to reply with text instead of requesting more tool calls.
-      const isLastIteration = maxIterations === 0;
-      const currentTools = isLastIteration ? [] : tools;
+      const isLastTurn = maxTurns === 0;
+      const currentTools = isLastTurn ? [] : tools;
 
-      if (isLastIteration) {
+      if (isLastTurn) {
         process.stderr.write(
-          `[Info] Approaching tool-call iteration limit. Requesting final text response from model.\n`
+          `[Info] Approaching tool-call turn limit. Requesting final text response from model.\n`
         );
       }
 
@@ -291,10 +293,10 @@ export async function handleChatCommand(
 
           await outputFormatter.logToolCall(toolCall.name, toolCall.arguments);
 
-          // If we've exhausted iterations, reject remaining tool calls
+          // If we've exhausted turns, reject remaining tool calls
           // and let the loop exit naturally on the next condition check.
-          if (maxIterations <= 0) {
-            const rejectContent = `Error: Tool-call iteration limit (${MAX_ITERATION_LIMIT}) reached. Please provide a final text summary without further tool calls.`;
+          if (maxTurns <= 0) {
+            const rejectContent = `Error: Tool-call turn limit (${turnsLimit}) reached. Please provide a final text summary without further tool calls.`;
             const rejectMessage: Message = {
               role: 'tool',
               name: toolCall.name,
@@ -354,15 +356,25 @@ export async function handleChatCommand(
           }
         }
 
-        // If tool calls were rejected due to iteration limit, do one
+        // If tool calls were rejected due to turn limit, do one
         // final round without tools so the model produces a text reply.
-        if (maxIterations <= 0) {
-          process.stderr.write(
-            `[Warning] Tool-call iteration limit (${MAX_ITERATION_LIMIT}) reached. Making one final request for a text summary.\n`
-          );
-          // Allow one more iteration, but tools are already withheld
-          // because isLastIteration will be true (maxIterations is 0).
-          maxIterations = 1;
+        if (maxTurns <= 0) {
+          if (finalRoundAttempted) {
+            // Already tried a final round — model keeps returning tool calls.
+            // Force exit to prevent infinite loop.
+            process.stderr.write(
+              `[Warning] Model continues to request tool calls after final round. Stopping.\n`
+            );
+            continueLoop = false;
+          } else {
+            finalRoundAttempted = true;
+            process.stderr.write(
+              `[Warning] Tool-call turn limit (${turnsLimit}) reached. Making one final request for a text summary.\n`
+            );
+            // Allow one more turn, but tools are already withheld
+            // because isLastTurn will be true (maxTurns is 0).
+            maxTurns = 1;
+          }
         }
 
         // Continue loop to get model's response after tool execution

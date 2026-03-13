@@ -52,6 +52,7 @@ program
   .option('--json', 'Output progress as NDJSON')
   .option('--quiet', 'Suppress progress output')
   .option('--log <path>', 'Log file path (Markdown)')
+  .option('--max-turns <number>', 'Max tool-call turns (default: 100)', parseInt)
   .option('--dry-run', 'Show resolved config without calling LLM')
   .action(async (prompt: string | undefined, options: ChatOptions) => {
     await handleChatCommand(prompt, options);

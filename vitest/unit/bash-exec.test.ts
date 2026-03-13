@@ -197,11 +197,20 @@ describe('bash_exec tool', () => {
       const tempDir = await mkdtemp(join(tmpdir(), 'pai-bash-test-'));
       try {
         const outputFile = join(tempDir, 'output.txt');
-        const cmd = isCmdExe
-          ? `echo test content > ${outputFile}`
-          : `echo "test content" > ${outputFile}`;
+        let cmd: string;
+        let cmd2: string;
+        if (isCmdExe) {
+          cmd = `echo test content > ${outputFile}`;
+          cmd2 = `type ${outputFile}`;
+        } else {
+          // Convert Windows path to MSYS-style for bash on Windows (C:\foo → /c/foo)
+          const bashPath = isWin32
+            ? outputFile.replace(/\\/g, '/').replace(/^([A-Za-z]):/, (_, d: string) => `/${d.toLowerCase()}`)
+            : outputFile;
+          cmd = `echo "test content" > "${bashPath}"`;
+          cmd2 = `cat "${bashPath}"`;
+        }
         await tool.handler({ command: cmd });
-        const cmd2 = isCmdExe ? `type ${outputFile}` : `cat ${outputFile}`;
         const result2 = await tool.handler({ command: cmd2 });
         expect(result2.stdout).toContain('test content');
       } finally {
@@ -256,6 +265,7 @@ describe('bash_exec tool', () => {
   // Property-Based Tests
   describe('Property-Based Tests', () => {
     it('should always return stdout, stderr, and exitCode fields', async () => {
+      const t = createBashExecTool();
       await fc.assert(
         fc.asyncProperty(
           fc.oneof(
@@ -268,7 +278,6 @@ describe('bash_exec tool', () => {
               .map(s => isCmdExe ? `echo ${s} 1>&2` : `echo "${s}" >&2`),
           ),
           async (command) => {
-            const t = createBashExecTool();
             const result = await t.handler({ command });
 
             expect(result).toHaveProperty('stdout');
@@ -286,12 +295,12 @@ describe('bash_exec tool', () => {
     });
 
     it('should support pipes and command chaining with random data', async () => {
+      const t = createBashExecTool();
       await fc.assert(
         fc.asyncProperty(
           fc.string({ minLength: 3, maxLength: 10 })
             .filter(s => /^[a-zA-Z]+$/.test(s)),
           async (word) => {
-            const t = createBashExecTool();
 
             const pipeCmd = isCmdExe
               ? `echo ${word} | findstr ${word}`
@@ -312,12 +321,12 @@ describe('bash_exec tool', () => {
     });
 
     it('should faithfully capture echo output for alphanumeric strings', async () => {
+      const t = createBashExecTool();
       await fc.assert(
         fc.asyncProperty(
           fc.string({ minLength: 1, maxLength: 30 })
             .filter(s => /^[a-zA-Z0-9]+$/.test(s)),
           async (text) => {
-            const t = createBashExecTool();
             const cmd = isCmdExe ? `echo ${text}` : `echo "${text}"`;
             const result = await t.handler({ command: cmd });
             expect(result.exitCode).toBe(0);
@@ -329,11 +338,11 @@ describe('bash_exec tool', () => {
     });
 
     it('should capture exact exit codes', async () => {
+      const t = createBashExecTool();
       await fc.assert(
         fc.asyncProperty(
           fc.integer({ min: 0, max: 125 }),
           async (code) => {
-            const t = createBashExecTool();
             const result = await t.handler({ command: `exit ${code}` });
             expect(result.exitCode).toBe(code);
           }
