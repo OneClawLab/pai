@@ -1,12 +1,15 @@
 import { describe, it, expect } from 'vitest';
-import { createBashExecTool } from '../../src/tools/bash-exec.js';
+import { createBashExecTool, detectShell } from '../../src/tools/bash-exec.js';
 import type { BashExecArgs } from '../../src/types.js';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir, platform } from 'node:os';
 import * as fc from 'fast-check';
 
-const isWindows = platform() === 'win32';
+// Use the actual detected shell to decide command syntax in tests.
+// On Windows with Git Bash / MSYS2, isCmdExe will be false even though platform() === 'win32'.
+const { isCmdExe } = detectShell();
+const isWin32 = platform() === 'win32';
 
 describe('bash_exec tool', () => {
   const tool = createBashExecTool();
@@ -28,7 +31,7 @@ describe('bash_exec tool', () => {
     });
 
     it('should return stdout and stderr', async () => {
-      const cmd = isWindows
+      const cmd = isCmdExe
         ? 'echo stdout && echo stderr 1>&2'
         : 'echo "stdout" && echo "stderr" >&2';
       const result = await tool.handler({ command: cmd });
@@ -43,7 +46,7 @@ describe('bash_exec tool', () => {
     });
 
     it('should capture error output on command failure', async () => {
-      const cmd = isWindows
+      const cmd = isCmdExe
         ? 'dir /nonexistent-directory-xyz'
         : 'ls /nonexistent-directory-xyz';
       const result = await tool.handler({ command: cmd });
@@ -54,7 +57,7 @@ describe('bash_exec tool', () => {
 
   describe('shell features', () => {
     it('should support pipes', async () => {
-      const cmd = isWindows
+      const cmd = isCmdExe
         ? 'echo hello world | findstr world'
         : 'echo "hello world" | grep world';
       const result = await tool.handler({ command: cmd });
@@ -63,8 +66,7 @@ describe('bash_exec tool', () => {
     });
 
     it('should support command substitution', async () => {
-      if (isWindows) {
-        // Windows: use FOR /F to capture command output (real substitution)
+      if (isCmdExe) {
         const result = await tool.handler({
           command: 'for /F "delims=" %i in (\'echo 42\') do @echo Result: %i',
         });
@@ -80,7 +82,7 @@ describe('bash_exec tool', () => {
     });
 
     it('should support multiple commands', async () => {
-      const cmd = isWindows
+      const cmd = isCmdExe
         ? 'echo first && echo second'
         : 'echo "first" && echo "second"';
       const result = await tool.handler({ command: cmd });
@@ -90,16 +92,14 @@ describe('bash_exec tool', () => {
     });
 
     it('should support environment variables', async () => {
-      // Cross-platform: verify PATH env var is accessible
-      const pathCmd = isWindows ? 'echo %PATH%' : 'echo $PATH';
+      const pathCmd = isCmdExe ? 'echo %PATH%' : 'echo $PATH';
       const result = await tool.handler({ command: pathCmd });
       expect(result.exitCode).toBe(0);
       expect(result.stdout.trim().length).toBeGreaterThan(0);
-      // PATH should not literally be "%PATH%" or "$PATH"
       expect(result.stdout.trim()).not.toBe('%PATH%');
       expect(result.stdout.trim()).not.toBe('$PATH');
 
-      if (!isWindows) {
+      if (!isCmdExe) {
         const result2 = await tool.handler({ command: 'TEST_VAR="test value" && echo $TEST_VAR' });
         expect(result2.exitCode).toBe(0);
         expect(result2.stdout).toContain('test value');
@@ -111,14 +111,17 @@ describe('bash_exec tool', () => {
     it('should execute command in specified working directory', async () => {
       const tempDir = await mkdtemp(join(tmpdir(), 'pai-bash-test-'));
       try {
-        const cmd = isWindows ? 'cd' : 'pwd';
+        const cmd = isCmdExe ? 'cd' : 'pwd';
         const result = await tool.handler({ command: cmd, cwd: tempDir });
         expect(result.exitCode).toBe(0);
-        const normalizedStdout = result.stdout.trim().replace(/\\/g, '/').toLowerCase();
-        const normalizedTempDir = tempDir.replace(/\\/g, '/').toLowerCase();
-        expect(normalizedStdout).toContain(normalizedTempDir);
+
+        // On Windows with bash (Git Bash/MSYS2), pwd returns MSYS-style paths
+        // e.g. /c/Users/... instead of C:\Users\...
+        // Normalize both to compare just the directory name suffix
+        const dirName = tempDir.replace(/\\/g, '/').split('/').pop()!;
+        expect(result.stdout).toContain(dirName);
       } finally {
-        if (isWindows) await new Promise((r) => setTimeout(r, 100));
+        if (isWin32) await new Promise((r) => setTimeout(r, 100));
         await rm(tempDir, { recursive: true, force: true });
       }
     });
@@ -127,12 +130,12 @@ describe('bash_exec tool', () => {
       const tempDir = await mkdtemp(join(tmpdir(), 'pai-bash-test-'));
       try {
         await writeFile(join(tempDir, 'test.txt'), 'test content', 'utf-8');
-        const cmd = isWindows ? 'type test.txt' : 'cat test.txt';
+        const cmd = isCmdExe ? 'type test.txt' : 'cat test.txt';
         const result = await tool.handler({ command: cmd, cwd: tempDir });
         expect(result.exitCode).toBe(0);
         expect(result.stdout).toContain('test content');
       } finally {
-        if (isWindows) await new Promise((r) => setTimeout(r, 100));
+        if (isWin32) await new Promise((r) => setTimeout(r, 100));
         await rm(tempDir, { recursive: true, force: true });
       }
     });
@@ -140,7 +143,7 @@ describe('bash_exec tool', () => {
 
   describe('edge cases', () => {
     it('should handle empty stdout', async () => {
-      const cmd = isWindows ? 'echo.' : 'true';
+      const cmd = isCmdExe ? 'echo.' : 'true';
       const result = await tool.handler({ command: cmd });
       expect(result.exitCode).toBe(0);
     });
@@ -152,7 +155,7 @@ describe('bash_exec tool', () => {
     });
 
     it('should handle multiline output', async () => {
-      const cmd = isWindows
+      const cmd = isCmdExe
         ? 'echo Line 1 && echo Line 2 && echo Line 3'
         : 'printf "Line 1\\nLine 2\\nLine 3\\n"';
       const result = await tool.handler({ command: cmd });
@@ -163,7 +166,7 @@ describe('bash_exec tool', () => {
     });
 
     it('should handle large output', async () => {
-      const cmd = isWindows
+      const cmd = isCmdExe
         ? 'for /L %i in (1,1,100) do @echo %i'
         : 'seq 1 100';
       const result = await tool.handler({ command: cmd });
@@ -181,7 +184,7 @@ describe('bash_exec tool', () => {
     });
 
     it('should handle command that outputs only to stderr', async () => {
-      const cmd = isWindows
+      const cmd = isCmdExe
         ? 'echo error message 1>&2'
         : 'echo "error message" >&2';
       const result = await tool.handler({ command: cmd });
@@ -194,21 +197,21 @@ describe('bash_exec tool', () => {
       const tempDir = await mkdtemp(join(tmpdir(), 'pai-bash-test-'));
       try {
         const outputFile = join(tempDir, 'output.txt');
-        const cmd = isWindows
+        const cmd = isCmdExe
           ? `echo test content > ${outputFile}`
           : `echo "test content" > ${outputFile}`;
         await tool.handler({ command: cmd });
-        const cmd2 = isWindows ? `type ${outputFile}` : `cat ${outputFile}`;
+        const cmd2 = isCmdExe ? `type ${outputFile}` : `cat ${outputFile}`;
         const result2 = await tool.handler({ command: cmd2 });
         expect(result2.stdout).toContain('test content');
       } finally {
-        if (isWindows) await new Promise((r) => setTimeout(r, 100));
+        if (isWin32) await new Promise((r) => setTimeout(r, 100));
         await rm(tempDir, { recursive: true, force: true });
       }
     });
 
     it('should handle heredoc on Unix', async () => {
-      if (isWindows) return;
+      if (isCmdExe) return;
       const result = await tool.handler({
         command: 'cat << EOF\nLine 1\nLine 2\nLine 3\nEOF',
       });
@@ -240,9 +243,9 @@ describe('bash_exec tool', () => {
     });
 
     it('should handle command with OR operator on failure', async () => {
-      const cmd = isWindows ? '(exit 1) || echo fallback' : 'false || echo fallback';
+      const cmd = isCmdExe ? '(exit 1) || echo fallback' : 'false || echo fallback';
       const result = await tool.handler({ command: cmd });
-      if (!isWindows) {
+      if (!isCmdExe) {
         expect(result.stdout).toContain('fallback');
       } else {
         expect(result.exitCode).toBeDefined();
@@ -250,23 +253,19 @@ describe('bash_exec tool', () => {
     });
   });
 
-  // Property-Based Tests (inside main describe)
+  // Property-Based Tests
   describe('Property-Based Tests', () => {
-    // Feature: pai-cli-tool, Property 18: Command Result Structure
     it('should always return stdout, stderr, and exitCode fields', async () => {
       await fc.assert(
         fc.asyncProperty(
           fc.oneof(
-            // Random echo commands with generated strings
             fc.string({ minLength: 1, maxLength: 20 })
               .filter(s => /^[a-zA-Z0-9 ]+$/.test(s))
               .map(s => `echo ${s}`),
-            // Random exit codes
             fc.integer({ min: 0, max: 5 }).map(n => `exit ${n}`),
-            // Stderr output
             fc.string({ minLength: 1, maxLength: 10 })
               .filter(s => /^[a-zA-Z0-9]+$/.test(s))
-              .map(s => isWindows ? `echo ${s} 1>&2` : `echo "${s}" >&2`),
+              .map(s => isCmdExe ? `echo ${s} 1>&2` : `echo "${s}" >&2`),
           ),
           async (command) => {
             const t = createBashExecTool();
@@ -286,7 +285,6 @@ describe('bash_exec tool', () => {
       );
     });
 
-    // Feature: pai-cli-tool, Property 17: Bash Feature Support
     it('should support pipes and command chaining with random data', async () => {
       await fc.assert(
         fc.asyncProperty(
@@ -295,7 +293,7 @@ describe('bash_exec tool', () => {
           async (word) => {
             const t = createBashExecTool();
 
-            const pipeCmd = isWindows
+            const pipeCmd = isCmdExe
               ? `echo ${word} | findstr ${word}`
               : `echo "${word}" | grep "${word}"`;
             const pipeResult = await t.handler({ command: pipeCmd });
@@ -313,7 +311,6 @@ describe('bash_exec tool', () => {
       );
     });
 
-    // Property: echo content round-trip
     it('should faithfully capture echo output for alphanumeric strings', async () => {
       await fc.assert(
         fc.asyncProperty(
@@ -321,7 +318,7 @@ describe('bash_exec tool', () => {
             .filter(s => /^[a-zA-Z0-9]+$/.test(s)),
           async (text) => {
             const t = createBashExecTool();
-            const cmd = isWindows ? `echo ${text}` : `echo "${text}"`;
+            const cmd = isCmdExe ? `echo ${text}` : `echo "${text}"`;
             const result = await t.handler({ command: cmd });
             expect(result.exitCode).toBe(0);
             expect(result.stdout.trim()).toContain(text);
@@ -331,7 +328,6 @@ describe('bash_exec tool', () => {
       );
     });
 
-    // Property: exit code is faithfully captured
     it('should capture exact exit codes', async () => {
       await fc.assert(
         fc.asyncProperty(
