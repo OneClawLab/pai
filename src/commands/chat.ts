@@ -1,4 +1,4 @@
-import type { ChatOptions, Message } from '../types.js';
+import type { ChatOptions, Message, LLMResponse } from '../types.js';
 import { PAIError } from '../types.js';
 import { ConfigurationManager } from '../config-manager.js';
 import { SessionManager } from '../session-manager.js';
@@ -6,6 +6,7 @@ import { InputResolver } from '../input-resolver.js';
 import { OutputFormatter } from '../output-formatter.js';
 import { LLMClient } from '../llm-client.js';
 import { ToolRegistry } from '../tool-registry.js';
+import { getModels } from '@mariozechner/pi-ai';
 
 /**
  * Handle the chat command
@@ -63,7 +64,19 @@ export async function handleChatCommand(
 
     // Load configuration and resolve credentials
     const provider = await configManager.getProvider(options.provider);
-    const modelName = options.model || provider.defaultModel || provider.models?.[0];
+    let modelName = options.model || provider.defaultModel || provider.models?.[0];
+
+    // Fall back to pi-ai's known models for this provider
+    if (!modelName) {
+      try {
+        const knownModels = getModels(provider.name as any);
+        if (knownModels.length > 0) {
+          modelName = knownModels[0]!.id;
+        }
+      } catch {
+        // Provider not recognized by pi-ai, ignore
+      }
+    }
 
     if (!modelName) {
       throw new PAIError(
@@ -177,12 +190,27 @@ export async function handleChatCommand(
     let continueLoop = true;
     let maxIterations = 10; // Prevent infinite loops
 
+    // Compute content lengths for diagnostics
+    const systemMsg = messages.find(m => m.role === 'system');
+    const userMsg = [...messages].reverse().find(m => m.role === 'user');
+    const systemChars = systemMsg ? String(systemMsg.content).length : 0;
+    const userChars = userMsg ? (typeof userMsg.content === 'string' ? userMsg.content.length : JSON.stringify(userMsg.content).length) : 0;
+
     while (continueLoop && maxIterations > 0) {
       maxIterations--;
 
-      outputFormatter.writeProgress({ type: 'start', data: {} });
+      outputFormatter.writeProgress({ type: 'start', data: {
+        provider: provider.name,
+        model: modelName,
+        stream: options.stream ?? false,
+        messages: messages.length,
+        systemChars,
+        userChars,
+        tools: tools.length,
+      } });
 
       let assistantMessage: Message;
+      let lastResponse: LLMResponse | undefined;
 
       if (options.stream) {
         // Streaming mode
@@ -197,6 +225,7 @@ export async function handleChatCommand(
 
           if (response.finishReason !== 'streaming') {
             // Final response
+            lastResponse = response;
             if (response.toolCalls) {
               toolCalls.push(...response.toolCalls);
             }
@@ -215,6 +244,7 @@ export async function handleChatCommand(
       } else {
         // Non-streaming mode
         const response = await llmClient.chatComplete(messages, tools);
+        lastResponse = response;
         
         outputFormatter.writeModelOutput(response.content);
 
@@ -231,7 +261,10 @@ export async function handleChatCommand(
       messages.push(assistantMessage);
       newMessages.push(assistantMessage);
 
-      outputFormatter.writeProgress({ type: 'complete', data: {} });
+      outputFormatter.writeProgress({ type: 'complete', data: {
+        finishReason: lastResponse?.finishReason ?? 'unknown',
+        usage: lastResponse?.usage,
+      } });
 
       // Handle tool calls
       const toolCalls = (assistantMessage as any).tool_calls;

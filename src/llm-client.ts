@@ -89,6 +89,11 @@ export class LLMClient {
           const doneResponse: LLMResponse = {
             content: currentContent,
             finishReason: event.reason,
+            usage: (event as any).usage ? {
+              input: (event as any).usage.input ?? 0,
+              output: (event as any).usage.output ?? 0,
+              cost: (event as any).usage.cost ? { total: (event as any).usage.cost.total ?? 0 } : undefined,
+            } : undefined,
           };
           if (currentToolCalls.length > 0) {
             doneResponse.toolCalls = currentToolCalls;
@@ -131,6 +136,11 @@ export class LLMClient {
     const response: LLMResponse = {
       content,
       finishReason: result.stopReason,
+      usage: result.usage ? {
+        input: result.usage.input ?? 0,
+        output: result.usage.output ?? 0,
+        cost: result.usage.cost ? { total: result.usage.cost.total ?? 0 } : undefined,
+      } : undefined,
     };
     if (toolCalls.length > 0) {
       response.toolCalls = toolCalls;

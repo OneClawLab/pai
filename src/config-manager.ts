@@ -162,6 +162,59 @@ export class ConfigurationManager {
   }
 
   /**
+   * Patch an existing provider configuration (merge fields)
+   */
+  async updateProvider(name: string, updates: Record<string, any>): Promise<void> {
+    const config = await this.loadConfig();
+
+    const existingIndex = config.providers.findIndex((p) => p.name === name);
+
+    if (existingIndex < 0) {
+      throw new PAIError(
+        `Provider not found: ${name}`,
+        1 as ExitCode,
+        { provider: name, configPath: this.configPath }
+      );
+    }
+
+    // Deep merge updates into existing config
+    const existing = config.providers[existingIndex]!;
+    for (const [key, value] of Object.entries(updates)) {
+      if (key === 'name') continue; // Don't allow renaming
+      if (typeof value === 'object' && value !== null && !Array.isArray(value) &&
+          typeof (existing as any)[key] === 'object' && (existing as any)[key] !== null) {
+        // Merge nested objects (e.g. providerOptions)
+        (existing as any)[key] = { ...(existing as any)[key], ...value };
+      } else {
+        (existing as any)[key] = value;
+      }
+    }
+
+    config.providers[existingIndex] = existing;
+    await this.saveConfig(config);
+  }
+
+  /**
+   * Set the default provider
+   */
+  async setDefaultProvider(name: string): Promise<void> {
+    const config = await this.loadConfig();
+
+    // Verify provider exists
+    const exists = config.providers.some((p) => p.name === name);
+    if (!exists) {
+      throw new PAIError(
+        `Provider not found: ${name}`,
+        1 as ExitCode,
+        { provider: name, configPath: this.configPath }
+      );
+    }
+
+    config.defaultProvider = name;
+    await this.saveConfig(config);
+  }
+
+  /**
    * Delete a provider configuration
    */
   async deleteProvider(name: string): Promise<void> {
@@ -178,6 +231,12 @@ export class ConfigurationManager {
     }
 
     config.providers.splice(existingIndex, 1);
+
+    // Clear defaultProvider if the deleted provider was the default
+    if (config.defaultProvider === name) {
+      delete config.defaultProvider;
+    }
+
     await this.saveConfig(config);
   }
 

@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { handleChatCommand } from './commands/chat.js';
-import { handleModelList, handleModelConfig, handleModelLogin } from './commands/model.js';
+import { handleModelList, handleModelConfig, handleModelDefault, handleModelLogin } from './commands/model.js';
 import type { ChatOptions, ModelConfigOptions } from './types.js';
 
 // Get package.json info for version
@@ -78,11 +78,13 @@ modelCommand
   .description('Configure providers')
   .option('--config <path>', 'Config file path')
   .option('--add', 'Add or update provider')
+  .option('--update', 'Update fields on an existing provider')
   .option('--delete', 'Delete provider')
   .option('--show', 'Show provider configuration')
   .option('--name <name>', 'Provider name')
   .option('--provider <type>', 'Provider type')
   .option('--set <key=value...>', 'Set configuration values')
+  .option('--default', 'Set as default provider (with --add or --update)')
   .option('--json', 'Output as JSON')
   .action(async (options: ModelConfigOptions) => {
     await handleModelConfig(options);
@@ -96,6 +98,17 @@ modelCommand
   .option('--name <name>', 'Provider name')
   .action(async (options: ModelConfigOptions) => {
     await handleModelLogin(options);
+  });
+
+// Model default command (view/set default provider)
+modelCommand
+  .command('default')
+  .description('View or set the default provider')
+  .option('--config <path>', 'Config file path')
+  .option('--name <name>', 'Provider name to set as default')
+  .option('--json', 'Output as JSON')
+  .action(async (options: ModelConfigOptions) => {
+    await handleModelDefault(options);
   });
 
 // Error handling for unknown commands

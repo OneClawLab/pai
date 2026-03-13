@@ -81,9 +81,15 @@ export class OutputFormatter {
    */
   private writeHumanReadable(event: OutputEvent): void {
     switch (event.type) {
-      case 'start':
-        process.stderr.write('Starting request...\n');
+      case 'start': {
+        const d = event.data;
+        const parts = [`Starting request (${d.provider || '?'}/${d.model || '?'}`];
+        if (d.messages) parts.push(`${d.messages} msgs`);
+        if (d.tools) parts.push(`${d.tools} tools`);
+        if (d.stream) parts.push('stream');
+        process.stderr.write(parts.join(', ') + ')...\n');
         break;
+      }
       case 'chunk':
         // Don't output individual chunks in human mode
         break;
@@ -93,9 +99,14 @@ export class OutputFormatter {
       case 'tool_result':
         process.stderr.write(`Tool result: ${JSON.stringify(event.data)}\n`);
         break;
-      case 'complete':
-        process.stderr.write('Request complete.\n');
+      case 'complete': {
+        const d = event.data;
+        const parts = ['Request complete'];
+        if (d.finishReason) parts.push(`reason=${d.finishReason}`);
+        if (d.usage) parts.push(`tokens: in=${d.usage.input} out=${d.usage.output}`);
+        process.stderr.write(parts.join(', ') + '.\n');
         break;
+      }
       case 'error':
         process.stderr.write(`Error: ${event.data}\n`);
         break;

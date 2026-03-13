@@ -218,7 +218,76 @@ export async function handleModelConfig(options: ModelConfigOptions): Promise<vo
 
       await configManager.addProvider(providerConfig);
 
+      // Set as default provider if --default flag is provided
+      if (options.default) {
+        await configManager.setDefaultProvider(options.name);
+      }
+
       console.log(`Provider "${options.name}" configured successfully.`);
+    } else if (options.update) {
+      // Update existing provider fields
+      if (!options.name) {
+        throw new PAIError('Provider name is required', 1, {
+          message: 'Use --name <provider-name>',
+        });
+      }
+
+      if (!options.set || options.set.length === 0) {
+        throw new PAIError('No fields to update', 1, {
+          message: 'Use --set key=value to specify fields to update',
+        });
+      }
+
+      // Known configuration keys
+      const knownKeys = new Set([
+        'apiKey', 'defaultModel', 'models', 'temperature', 'maxTokens',
+        'api', 'baseUrl', 'reasoning', 'input', 'contextWindow',
+        'providerOptions',
+      ]);
+
+      const updates: Record<string, any> = {};
+
+      for (const setting of options.set) {
+        const eqIndex = setting.indexOf('=');
+        if (eqIndex < 1) {
+          throw new PAIError(
+            `Invalid --set format: ${setting}`,
+            1,
+            { message: 'Use --set key=value' }
+          );
+        }
+        const key = setting.substring(0, eqIndex);
+        const value = setting.substring(eqIndex + 1);
+
+        const topKey = key.split('.')[0]!;
+        if (!knownKeys.has(topKey)) {
+          console.error(`Warning: unknown key "${key}". Known keys: ${[...knownKeys].join(', ')}`);
+        }
+
+        if (key.includes('.')) {
+          const parts = key.split('.');
+          let target = updates;
+          for (let i = 0; i < parts.length - 1; i++) {
+            const part = parts[i]!;
+            if (!target[part] || typeof target[part] !== 'object') {
+              target[part] = {};
+            }
+            target = target[part];
+          }
+          target[parts[parts.length - 1]!] = value;
+        } else {
+          updates[key] = value;
+        }
+      }
+
+      await configManager.updateProvider(options.name, updates);
+
+      // Set as default provider if --default flag is provided
+      if (options.default) {
+        await configManager.setDefaultProvider(options.name);
+      }
+
+      console.log(`Provider "${options.name}" updated successfully.`);
     } else if (options.delete) {
       // Delete provider
       if (!options.name) {
@@ -232,7 +301,7 @@ export async function handleModelConfig(options: ModelConfigOptions): Promise<vo
       console.log(`Provider "${options.name}" deleted successfully.`);
     } else {
       throw new PAIError('No action specified', 1, {
-        message: 'Use --add, --delete, or --show',
+        message: 'Use --add, --update, --delete, or --show',
       });
     }
   } catch (error) {
@@ -249,6 +318,46 @@ export async function handleModelConfig(options: ModelConfigOptions): Promise<vo
   }
 }
 
+
+/**
+ * Handle model default command — view or set the default provider
+ */
+export async function handleModelDefault(options: ModelConfigOptions): Promise<void> {
+  const configManager = new ConfigurationManager(options);
+
+  try {
+    if (options.name) {
+      // Set default provider
+      await configManager.setDefaultProvider(options.name);
+      console.log(`Default provider set to "${options.name}".`);
+    } else {
+      // Show current default provider
+      const config = await configManager.loadConfig();
+
+      if (options.json) {
+        console.log(JSON.stringify({ defaultProvider: config.defaultProvider ?? null }));
+      } else {
+        if (config.defaultProvider) {
+          console.log(`Default provider: ${config.defaultProvider}`);
+        } else {
+          console.log('No default provider configured.');
+          console.log('Use "pai model default --name <provider>" to set one.');
+        }
+      }
+    }
+  } catch (error) {
+    if (error instanceof PAIError) {
+      console.error(`Error: ${error.message}`);
+      if (error.context) {
+        console.error(`Context: ${JSON.stringify(error.context)}`);
+      }
+      process.exit(error.exitCode);
+    } else {
+      console.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
+      process.exit(2);
+    }
+  }
+}
 
 /**
  * Handle model login command (OAuth providers)

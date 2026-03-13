@@ -106,6 +106,11 @@ export interface LLMResponse {
   content: string;
   toolCalls?: ToolCall[];
   finishReason: string;
+  usage?: {
+    input: number;
+    output: number;
+    cost?: { total: number };
+  };
 }
 
 // ============================================================================
@@ -136,12 +141,14 @@ export interface ChatOptions extends CLIOptions {
 
 export interface ModelConfigOptions extends CLIOptions {
   add?: boolean;
+  update?: boolean;
   delete?: boolean;
   show?: boolean;
   all?: boolean;
   name?: string;
   provider?: string;
   set?: string[];
+  default?: boolean;
 }
 
 // ============================================================================

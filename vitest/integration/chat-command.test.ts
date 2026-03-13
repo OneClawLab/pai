@@ -363,6 +363,11 @@ describe('Integration Tests', () => {
       };
       await writeFile(configPath, JSON.stringify(config), 'utf-8');
 
+      // Mock getModels to return empty so no fallback model is found
+      const piAi = await import('@mariozechner/pi-ai');
+      const getModelsMock = vi.mocked(piAi.getModels);
+      getModelsMock.mockReturnValueOnce([]);
+
       const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {}) as any);
 
       await handleChatCommand('Hello', { config: configPath });

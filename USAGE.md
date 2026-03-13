@@ -34,7 +34,20 @@ pai model list
 pai model list --all
 ```
 
-### 3. Chat with an LLM
+### 3. Set a Default Provider
+
+```bash
+# Set default provider (so you don't need --provider every time)
+pai model default --name openai
+
+# Or set it when adding a provider
+pai model config --add --name openai --provider openai --set apiKey=sk-... --default
+
+# View current default
+pai model default
+```
+
+### 4. Chat with an LLM
 
 ```bash
 # Simple chat
@@ -513,13 +526,51 @@ List providers and models.
 Configure providers (add/update/delete/show).
 
 **Options:**
-- `--add` - Add or update provider
+- `--add` - Add or replace a provider (requires `--provider`)
+- `--update` - Update fields on an existing provider (no `--provider` needed)
 - `--delete` - Delete provider
 - `--show` - Show provider configuration (sensitive fields masked)
 - `--name <name>` - Provider name
-- `--provider <type>` - Provider type
+- `--provider <type>` - Provider type (required for `--add`)
 - `--set <key=value...>` - Set configuration values (known keys: apiKey, defaultModel, models, temperature, maxTokens, api, baseUrl, reasoning, input, contextWindow, providerOptions)
+- `--default` - Set as default provider (used with `--add` or `--update`)
 - `--json` - Output as JSON (for --show)
+
+**Examples:**
+
+```bash
+# Add a new provider
+pai model config --add --name openai --provider openai --set apiKey=sk-...
+
+# Update an existing provider's default model
+pai model config --update --name openai --set defaultModel=gpt-4o
+
+# Update multiple fields at once
+pai model config --update --name openai --set defaultModel=gpt-4o --set temperature=0.5
+
+# Update and set as default provider
+pai model config --update --name openai --set defaultModel=gpt-4o --default
+```
+
+### `pai model default`
+
+View or set the default provider. When no `--name` is given, shows the current default. When `--name` is provided, sets that provider as the default.
+
+```bash
+# View current default provider
+pai model default
+
+# Set default provider
+pai model default --name openai
+
+# Output as JSON
+pai model default --json
+```
+
+**Options:**
+- `--name <name>` - Provider name to set as default (must already be configured)
+- `--json` - Output as JSON
+- `--config <path>` - Config file path
 
 ### `pai model login`
 
@@ -728,6 +779,9 @@ List available providers and configure one:
 ```bash
 pai model list --all
 pai model config --add --name <provider> --provider <provider> --set apiKey=...
+
+# Set as default to avoid specifying --provider every time
+pai model default --name <provider>
 ```
 
 ### "Model not specified"
@@ -737,9 +791,11 @@ Specify the model explicitly or set a default:
 ```bash
 pai chat "Hello" --provider openai --model gpt-4o-mini
 
-# Or set a default model
-pai model config --add --name openai --provider openai --set defaultModel=gpt-4o-mini
+# Or set a default model on an existing provider
+pai model config --update --name openai --set defaultModel=gpt-4o-mini
 ```
+
+Note: If no `defaultModel` is configured, PAI will automatically use the first model known for that provider.
 
 ### OAuth token expired
 
