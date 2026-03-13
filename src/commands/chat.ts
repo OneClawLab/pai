@@ -8,6 +8,8 @@ import { LLMClient } from '../llm-client.js';
 import { ToolRegistry } from '../tool-registry.js';
 import { getModels } from '@mariozechner/pi-ai';
 
+const MAX_ITERATION_LIMIT = 100; // Prevent infinite loops
+
 /**
  * Handle the chat command
  */
@@ -188,7 +190,7 @@ export async function handleChatCommand(
 
     // Execute chat with tool calling loop
     let continueLoop = true;
-    let maxIterations = 10; // Prevent infinite loops
+    let maxIterations = MAX_ITERATION_LIMIT;
 
     // Compute content lengths for diagnostics
     const systemMsg = messages.find(m => m.role === 'system');
@@ -199,6 +201,17 @@ export async function handleChatCommand(
     while (continueLoop && maxIterations > 0) {
       maxIterations--;
 
+      // On the last allowed iteration, withhold tools so the model is
+      // forced to reply with text instead of requesting more tool calls.
+      const isLastIteration = maxIterations === 0;
+      const currentTools = isLastIteration ? [] : tools;
+
+      if (isLastIteration) {
+        process.stderr.write(
+          `[Info] Approaching tool-call iteration limit. Requesting final text response from model.\n`
+        );
+      }
+
       outputFormatter.writeProgress({ type: 'start', data: {
         provider: provider.name,
         model: modelName,
@@ -206,7 +219,7 @@ export async function handleChatCommand(
         messages: messages.length,
         systemChars,
         userChars,
-        tools: tools.length,
+        tools: currentTools.length,
       } });
 
       let assistantMessage: Message;
@@ -217,7 +230,7 @@ export async function handleChatCommand(
         let fullContent = '';
         const toolCalls: any[] = [];
 
-        for await (const response of llmClient.chat(messages, tools)) {
+        for await (const response of llmClient.chat(messages, currentTools)) {
           if (response.content && response.finishReason === 'streaming') {
             fullContent += response.content;
             outputFormatter.writeModelOutput(response.content);
@@ -243,7 +256,7 @@ export async function handleChatCommand(
         }
       } else {
         // Non-streaming mode
-        const response = await llmClient.chatComplete(messages, tools);
+        const response = await llmClient.chatComplete(messages, currentTools);
         lastResponse = response;
         
         outputFormatter.writeModelOutput(response.content);
@@ -277,6 +290,27 @@ export async function handleChatCommand(
           });
 
           await outputFormatter.logToolCall(toolCall.name, toolCall.arguments);
+
+          // If we've exhausted iterations, reject remaining tool calls
+          // and let the loop exit naturally on the next condition check.
+          if (maxIterations <= 0) {
+            const rejectContent = `Error: Tool-call iteration limit (${MAX_ITERATION_LIMIT}) reached. Please provide a final text summary without further tool calls.`;
+            const rejectMessage: Message = {
+              role: 'tool',
+              name: toolCall.name,
+              tool_call_id: toolCall.id,
+              content: rejectContent,
+            };
+            messages.push(rejectMessage);
+            newMessages.push(rejectMessage);
+
+            outputFormatter.writeProgress({
+              type: 'tool_result',
+              data: { error: rejectContent },
+            });
+            await outputFormatter.logToolResult(toolCall.name, { error: rejectContent });
+            continue;
+          }
 
           try {
             const result = await toolRegistry.execute(
@@ -318,6 +352,17 @@ export async function handleChatCommand(
 
             await outputFormatter.logToolResult(toolCall.name, { error: String(error) });
           }
+        }
+
+        // If tool calls were rejected due to iteration limit, do one
+        // final round without tools so the model produces a text reply.
+        if (maxIterations <= 0) {
+          process.stderr.write(
+            `[Warning] Tool-call iteration limit (${MAX_ITERATION_LIMIT}) reached. Making one final request for a text summary.\n`
+          );
+          // Allow one more iteration, but tools are already withheld
+          // because isLastIteration will be true (maxIterations is 0).
+          maxIterations = 1;
         }
 
         // Continue loop to get model's response after tool execution
