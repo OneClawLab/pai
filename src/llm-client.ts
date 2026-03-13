@@ -86,14 +86,17 @@ export class LLMClient {
           break;
 
         case 'done': {
+          const usageData = (event as any).usage;
           const doneResponse: LLMResponse = {
             content: currentContent,
             finishReason: event.reason,
-            usage: (event as any).usage ? {
-              input: (event as any).usage.input ?? 0,
-              output: (event as any).usage.output ?? 0,
-              cost: (event as any).usage.cost ? { total: (event as any).usage.cost.total ?? 0 } : undefined,
-            } : undefined,
+            ...(usageData ? {
+              usage: {
+                input: usageData.input ?? 0,
+                output: usageData.output ?? 0,
+                ...(usageData.cost ? { cost: { total: usageData.cost.total ?? 0 } } : {}),
+              },
+            } : {}),
           };
           if (currentToolCalls.length > 0) {
             doneResponse.toolCalls = currentToolCalls;
@@ -136,11 +139,13 @@ export class LLMClient {
     const response: LLMResponse = {
       content,
       finishReason: result.stopReason,
-      usage: result.usage ? {
-        input: result.usage.input ?? 0,
-        output: result.usage.output ?? 0,
-        cost: result.usage.cost ? { total: result.usage.cost.total ?? 0 } : undefined,
-      } : undefined,
+      ...(result.usage ? {
+        usage: {
+          input: result.usage.input ?? 0,
+          output: result.usage.output ?? 0,
+          ...(result.usage.cost ? { cost: { total: result.usage.cost.total ?? 0 } } : {}),
+        },
+      } : {}),
     };
     if (toolCalls.length > 0) {
       response.toolCalls = toolCalls;

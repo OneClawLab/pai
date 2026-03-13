@@ -461,7 +461,7 @@ describe('Model Commands', () => {
       await handleModelLogin({ config: configPath, name: 'test-oauth' });
 
       expect(loginFn).toHaveBeenCalledTimes(1);
-      const callArgs = loginFn.mock.calls[0][0];
+      const callArgs = loginFn.mock.calls[0]![0];
       expect(callArgs).toHaveProperty('onAuth');
       expect(callArgs).toHaveProperty('onPrompt');
       expect(callArgs).toHaveProperty('onProgress');
@@ -558,7 +558,7 @@ describe('Model Commands', () => {
 
       // getOAuthProvider returns null — no provider-specific logic
       const oauthModule = await import('@mariozechner/pi-ai/oauth');
-      vi.mocked(oauthModule.getOAuthProvider).mockReturnValue(null);
+      vi.mocked(oauthModule.getOAuthProvider).mockReturnValue(undefined as any);
 
       const cm = new ConfigurationManager({ config: configPath });
       const key = await cm.resolveCredentials('unknown-oauth');
