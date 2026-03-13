@@ -2,6 +2,7 @@ import { appendFile, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import type { OutputEvent, ExitCode } from './types.js';
 import { PAIError } from './types.js';
+import { sanitizeContent, sanitizeString } from './sanitize.js';
 
 /**
  * Handles output formatting for stdout/stderr
@@ -22,11 +23,14 @@ export class OutputFormatter {
    * Always writes to stdout regardless of mode
    */
   writeModelOutput(content: string): void {
+    // NOTE: DON'T sanitize model output to avoid break caller behaviors
     process.stdout.write(content);
 
     // Also append to log file if specified
     if (this.logFile) {
-      this.appendToLog('assistant', content).catch(() => {
+      // sanitize when output to log file
+      const { sanitized } = sanitizeString(content);
+      this.appendToLog('assistant', sanitized).catch(() => {
         // Silently fail log writes to not interrupt main flow
       });
     }
@@ -40,9 +44,15 @@ export class OutputFormatter {
     if (this.quietMode) return;
 
     if (this.jsonMode) {
-      this.writeNDJSON(event);
+      // Sanitize event.data before serializing
+      const sc = sanitizeContent(event.data);
+      const outEvent = { ...event, data: sc.sanitized, timestamp: event.timestamp || Date.now() };
+      this.writeNDJSON(outEvent as OutputEvent);
     } else {
-      this.writeHumanReadable(event);
+      // Sanitize data for human readable output as well
+      const sc = sanitizeContent(event.data);
+      const outEvent = { ...event, data: sc.sanitized };
+      this.writeHumanReadable(outEvent as OutputEvent);
     }
   }
 
@@ -53,15 +63,24 @@ export class OutputFormatter {
     if (this.jsonMode) {
       const errorObj = {
         type: 'error',
-        message: error.message,
-        ...(error instanceof PAIError && error.context ? { context: error.context } : {}),
+        message: sanitizeString(error.message).sanitized,
+        ...(error instanceof PAIError && error.context ? { context: sanitizeContent(error.context).sanitized } : {}),
       };
       process.stderr.write(JSON.stringify(errorObj) + '\n');
     } else {
-      process.stderr.write(`Error: ${error.message}\n`);
+      process.stderr.write(`Error: ${sanitizeString(error.message).sanitized}\n`);
       if (error instanceof PAIError && error.context) {
-        process.stderr.write(`Context: ${JSON.stringify(error.context)}\n`);
+        process.stderr.write(`Context: ${JSON.stringify(sanitizeContent(error.context).sanitized)}\n`);
       }
+    }
+
+    // Also append to log file if specified    
+    if (this.logFile) {
+      const msg = sanitizeString(error.message).sanitized;
+      const ctx = error instanceof PAIError && error.context ? JSON.stringify(sanitizeContent(error.context).sanitized) : '{}';
+      this.appendToLog('error', `${msg}\n\nContext: ${ctx}`).catch(() => {
+        // Silently fail log writes to not interrupt main flow
+      });
     }
   }
 
