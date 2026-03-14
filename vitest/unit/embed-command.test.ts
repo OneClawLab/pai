@@ -93,7 +93,13 @@ describe('handleEmbedCommand', () => {
         texts: ['hello world'],
         model: 'text-embedding-3-small',
       });
-      expect(stdoutOutput).toContain('[0.1,0.2,0.3]');
+      // Output is now a hex string array (one 8-char hex per float32)
+      const parsed: string[] = JSON.parse(stdoutOutput.trim());
+      expect(Array.isArray(parsed)).toBe(true);
+      expect(parsed).toHaveLength(3);
+      for (const h of parsed) {
+        expect(h).toMatch(/^[0-9a-f]{8}$/);
+      }
     });
 
     it('should embed text from --input-file', async () => {
@@ -136,8 +142,14 @@ describe('handleEmbedCommand', () => {
         texts: ['hello', 'world'],
         model: 'text-embedding-3-small',
       });
-      expect(stdoutOutput).toContain('[0.1,0.2]');
-      expect(stdoutOutput).toContain('[0.3,0.4]');
+      // Each line is a hex string array
+      const lines = stdoutOutput.trim().split('\n');
+      expect(lines).toHaveLength(2);
+      for (const line of lines) {
+        const parsed: string[] = JSON.parse(line);
+        expect(Array.isArray(parsed)).toBe(true);
+        expect(parsed).toHaveLength(2);
+      }
     });
 
     it('should handle empty batch array', async () => {
@@ -162,6 +174,10 @@ describe('handleEmbedCommand', () => {
 
       const parsed = JSON.parse(stdoutOutput.trim());
       expect(parsed).toHaveProperty('embedding');
+      expect(Array.isArray(parsed.embedding)).toBe(true);
+      for (const h of parsed.embedding) {
+        expect(h).toMatch(/^[0-9a-f]{8}$/);
+      }
       expect(parsed).toHaveProperty('model', 'text-embedding-3-small');
       expect(parsed).toHaveProperty('usage');
     });
@@ -308,9 +324,10 @@ describe('handleEmbedCommand', () => {
     it('should suppress progress output in quiet mode', async () => {
       await handleEmbedCommand('hello', { quiet: true });
 
-      // In quiet mode, OutputFormatter suppresses progress events
-      // stdout should still have the embedding output
-      expect(stdoutOutput).toContain('[0.1,0.2,0.3]');
+      // stdout should still have the embedding output (hex string array)
+      const parsed: string[] = JSON.parse(stdoutOutput.trim());
+      expect(Array.isArray(parsed)).toBe(true);
+      expect(parsed).toHaveLength(3);
     });
   });
 });

@@ -19,7 +19,7 @@ export async function handleEmbedCommand(
   const inputResolver = new InputResolver();
   const outputFormatter = new OutputFormatter(
     options.json,
-    options.quiet
+    options.quiet ?? true
   );
 
   try {

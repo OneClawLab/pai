@@ -7,6 +7,16 @@ import { handleEmbedCommand } from './commands/embed.js';
 import { handleModelList, handleModelConfig, handleModelDefault, handleModelLogin } from './commands/model.js';
 import type { ChatOptions, EmbedOptions, ModelConfigOptions } from './types.js';
 
+// Gracefully handle EPIPE (e.g. `pai embed "x" | head` or broken pipe)
+process.stdout.on('error', (err: NodeJS.ErrnoException) => {
+  if (err.code === 'EPIPE') process.exit(0);
+  throw err;
+});
+process.stderr.on('error', (err: NodeJS.ErrnoException) => {
+  if (err.code === 'EPIPE') process.exit(0);
+  throw err;
+});
+
 // Get package.json info for version
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const packageJson = JSON.parse(

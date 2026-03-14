@@ -3,9 +3,9 @@
  *
  * **Validates: Requirements 3.1**
  *
- * For any embedding vectors (arrays of floats), the plain text formatter should
- * output one JSON array per line (single mode = one line, batch mode = one line
- * per embedding), and the parsed float values must match the original vectors.
+ * For any embedding vectors, the plain text formatter should output one JSON hex
+ * string array per line (single mode = one line, batch mode = one line per embedding),
+ * and the decoded float32 values must match the original vectors at float32 precision.
  */
 
 import { describe, it, expect } from 'vitest';
@@ -13,9 +13,6 @@ import * as fc from 'fast-check';
 import { formatEmbeddingOutput } from '../../src/embed-io.js';
 import type { EmbeddingResponse } from '../../src/embedding-client.js';
 
-/**
- * Helper: build a minimal EmbeddingResponse from a list of embedding vectors.
- */
 function makeResponse(embeddings: number[][]): EmbeddingResponse {
   return {
     embeddings,
@@ -24,19 +21,34 @@ function makeResponse(embeddings: number[][]): EmbeddingResponse {
   };
 }
 
-/** Arbitrary for a single finite float (no NaN / ±Infinity / -0, since JSON cannot distinguish -0 from +0). */
+function hexToVector(hexArr: string[]): number[] {
+  const result: number[] = new Array(hexArr.length);
+  const buf = new ArrayBuffer(4);
+  const view = new DataView(buf);
+  for (let i = 0; i < hexArr.length; i++) {
+    const h = hexArr[i]!;
+    for (let b = 0; b < 4; b++) {
+      view.setUint8(b, parseInt(h.substring(b * 2, b * 2 + 2), 16));
+    }
+    result[i] = view.getFloat32(0, false);
+  }
+  return result;
+}
+
+function f32(n: number): number {
+  const buf = new Float32Array(1);
+  buf[0] = n;
+  return buf[0];
+}
+
 const finiteFloat = fc
   .double({ noNaN: true, noDefaultInfinity: true })
   .map((v) => (Object.is(v, -0) ? 0 : v));
 
-/** Arbitrary for a single embedding vector (1–20 dimensions). */
 const embeddingVec = fc.array(finiteFloat, { minLength: 1, maxLength: 20 });
 
 describe('Property 4: 纯文本输出格式', () => {
-  // Feature: embed-command, Property 4: 纯文本输出格式
-  // **Validates: Requirements 3.1**
-
-  it('single embedding produces exactly one line that is a valid JSON array matching the input', () => {
+  it('single embedding produces exactly one line that is a valid JSON hex string array', () => {
     fc.assert(
       fc.property(embeddingVec, (vec) => {
         const output = formatEmbeddingOutput(makeResponse([vec]), {
@@ -44,18 +56,19 @@ describe('Property 4: 纯文本输出格式', () => {
           batch: false,
         });
 
-        // Exactly one line (no newline characters inside)
         const lines = output.split('\n');
         expect(lines).toHaveLength(1);
 
-        // The line parses as a JSON array of numbers
-        const parsed: number[] = JSON.parse(lines[0]);
+        const parsed: string[] = JSON.parse(lines[0]!);
         expect(Array.isArray(parsed)).toBe(true);
         expect(parsed).toHaveLength(vec.length);
+        for (const h of parsed) {
+          expect(h).toMatch(/^[0-9a-f]{8}$/);
+        }
 
-        // Every value matches the original
+        const decoded = hexToVector(parsed);
         for (let i = 0; i < vec.length; i++) {
-          expect(parsed[i]).toBe(vec[i]);
+          expect(decoded[i]).toBe(f32(vec[i]!));
         }
       }),
       { numRuns: 100 },
@@ -75,18 +88,17 @@ describe('Property 4: 纯文本输出格式', () => {
         const lines = output.split('\n');
         expect(lines).toHaveLength(vecs.length);
 
-        // Each line is a valid JSON array
         for (let i = 0; i < vecs.length; i++) {
-          const parsed: number[] = JSON.parse(lines[i]);
+          const parsed: string[] = JSON.parse(lines[i]!);
           expect(Array.isArray(parsed)).toBe(true);
-          expect(parsed).toHaveLength(vecs[i].length);
+          expect(parsed).toHaveLength(vecs[i]!.length);
         }
       }),
       { numRuns: 100 },
     );
   });
 
-  it('parsed float values from plain text output match the original embedding values', () => {
+  it('decoded float32 values from hex output match the original embedding values', () => {
     const batchArb = fc.array(embeddingVec, { minLength: 1, maxLength: 10 });
 
     fc.assert(
@@ -99,9 +111,10 @@ describe('Property 4: 纯文本输出格式', () => {
         const lines = output.split('\n');
 
         for (let i = 0; i < vecs.length; i++) {
-          const parsed: number[] = JSON.parse(lines[i]);
-          for (let j = 0; j < vecs[i].length; j++) {
-            expect(parsed[j]).toBe(vecs[i][j]);
+          const parsed: string[] = JSON.parse(lines[i]!);
+          const decoded = hexToVector(parsed);
+          for (let j = 0; j < vecs[i]!.length; j++) {
+            expect(decoded[j]).toBe(f32(vecs[i]![j]!));
           }
         }
       }),
