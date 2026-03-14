@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { handleChatCommand } from './commands/chat.js';
 import { handleEmbedCommand } from './commands/embed.js';
 import { handleModelList, handleModelConfig, handleModelDefault, handleModelLogin } from './commands/model.js';
+import { installHelp, addSubcommandExamples } from './help.js';
 import type { ChatOptions, EmbedOptions, ModelConfigOptions } from './types.js';
 
 // Gracefully handle EPIPE (e.g. `pai embed "x" | head` or broken pipe)
@@ -41,10 +42,20 @@ const program = new Command();
 program
   .name('pai')
   .description('PAI - A Unix-style CLI tool for interacting with LLMs')
-  .version(versionString);
+  .version(versionString)
+  .showHelpAfterError(true)
+  .configureOutput({
+    writeErr: (str) => process.stderr.write(str),
+    writeOut: (str) => process.stdout.write(str),
+  });
+
+program.exitOverride();
+
+// Install help system (examples + --verbose support)
+installHelp(program);
 
 // Chat command
-program
+const chatCmd = program
   .command('chat')
   .description('Chat with an LLM')
   .argument('[prompt]', 'User message (or use stdin/--input-file)')
@@ -68,9 +79,10 @@ program
   .action(async (prompt: string | undefined, options: ChatOptions) => {
     await handleChatCommand(prompt, options);
   });
+addSubcommandExamples(chatCmd, 'chat');
 
 // Embed command
-program
+const embedCmd = program
   .command('embed')
   .description('Generate text embeddings')
   .argument('[text]', 'Text to embed (or use stdin/--input-file)')
@@ -84,6 +96,7 @@ program
   .action(async (text: string | undefined, options: EmbedOptions) => {
     await handleEmbedCommand(text, options);
   });
+addSubcommandExamples(embedCmd, 'embed');
 
 // Model list command
 const modelCommand = program
@@ -99,6 +112,7 @@ modelCommand
   .action(async (options: ModelConfigOptions) => {
     await handleModelList(options);
   });
+addSubcommandExamples(modelCommand.commands.find(c => c.name() === 'list')!, 'list');
 
 // Model config command
 modelCommand
@@ -117,7 +131,7 @@ modelCommand
   .action(async (options: ModelConfigOptions) => {
     await handleModelConfig(options);
   });
-
+addSubcommandExamples(modelCommand.commands.find(c => c.name() === 'config')!, 'config');
 // Model login command (OAuth providers)
 modelCommand
   .command('login')
@@ -127,6 +141,7 @@ modelCommand
   .action(async (options: ModelConfigOptions) => {
     await handleModelLogin(options);
   });
+addSubcommandExamples(modelCommand.commands.find(c => c.name() === 'login')!, 'login');
 
 // Model default command (view/set default provider)
 modelCommand
@@ -140,18 +155,32 @@ modelCommand
   .action(async (options: ModelConfigOptions) => {
     await handleModelDefault(options);
   });
+addSubcommandExamples(modelCommand.commands.find(c => c.name() === 'default')!, 'default');
 
 // Error handling for unknown commands
 program.on('command:*', () => {
-  console.error('Invalid command: %s', program.args.join(' '));
-  console.error('See --help for available commands.');
-  process.exit(1);
+  process.stderr.write(`Invalid command: ${program.args.join(' ')}\nSee --help for available commands.\n`);
+  process.exit(2);
 });
 
 // Parse arguments
-program.parse(process.argv);
+(async () => {
+  try {
+    await program.parseAsync(process.argv);
+  } catch (err) {
+    // commander throws CommanderError on exitOverride
+    if (err && typeof err === 'object' && 'exitCode' in err) {
+      const exitCode = (err as { exitCode: number }).exitCode;
+      // Map commander's exit code 1 (argument errors) to 2 per spec
+      process.exitCode = exitCode === 1 ? 2 : exitCode;
+    } else {
+      process.stderr.write(`Error: ${err instanceof Error ? err.message : String(err)}\n`);
+      process.exitCode = 2;
+    }
+  }
+})();
 
-// Show help if no arguments
+// Show help if no arguments (exit 0)
 if (!process.argv.slice(2).length) {
   program.outputHelp();
 }
