@@ -28,6 +28,9 @@ export interface EmbeddingClientConfig {
   apiKey: string;
   model: string;
   baseUrl?: string;
+  providerOptions?: Record<string, any>;
+  /** The API type, e.g. 'azure-openai-responses' */
+  api?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -46,11 +49,16 @@ export class EmbeddingClient {
   private readonly endpoint: string;
   private readonly apiKey: string;
   private readonly model: string;
+  private readonly isAzure: boolean;
 
   constructor(config: EmbeddingClientConfig) {
     this.apiKey = config.apiKey;
     this.model = config.model;
-    this.endpoint = EmbeddingClient.resolveEndpoint(config.provider, config.baseUrl);
+    const apiType = config.api ?? config.provider;
+    this.isAzure = apiType === 'azure-openai-responses' || apiType === 'azure-openai';
+    this.endpoint = this.isAzure
+      ? EmbeddingClient.resolveAzureEndpoint(config.baseUrl, config.model, config.providerOptions)
+      : EmbeddingClient.resolveEndpoint(config.provider, config.baseUrl);
   }
 
   /**
@@ -72,6 +80,37 @@ export class EmbeddingClient {
   }
 
   /**
+   * Resolve the Azure OpenAI embeddings endpoint URL.
+   * Azure format: {baseUrl}/openai/deployments/{deployment}/embeddings?api-version={version}
+   */
+  static resolveAzureEndpoint(baseUrl?: string, model?: string, providerOptions?: Record<string, any>): string {
+    if (!baseUrl) {
+      throw new PAIError(
+        'Azure OpenAI requires a baseUrl. Please specify a baseUrl.',
+        ExitCode.PARAMETER_ERROR,
+      );
+    }
+    // For embeddings, use the model name as deployment name (embedding deployments
+    // are typically named after the model). azureDeploymentName in providerOptions
+    // usually refers to the chat model deployment, not the embedding one.
+    const deployment = model ?? providerOptions?.azureDeploymentName;
+    if (!deployment) {
+      throw new PAIError(
+        'Azure OpenAI requires a deployment name. Specify a model or set providerOptions.azureDeploymentName.',
+        ExitCode.PARAMETER_ERROR,
+      );
+    }
+    const apiVersion = providerOptions?.azureApiVersion;
+    // If azureApiVersion looks invalid (e.g. "v1"), fall back to a known good default
+    const resolvedVersion = (apiVersion && /^\d{4}-\d{2}-\d{2}/.test(apiVersion))
+      ? apiVersion
+      : '2024-06-01';
+    // Strip any /openai/v1 or trailing path from baseUrl to get the resource root
+    const resourceBase = baseUrl.replace(/\/openai\/v1\/?$/, '').replace(/\/+$/, '');
+    return `${resourceBase}/openai/deployments/${deployment}/embeddings?api-version=${resolvedVersion}`;
+  }
+
+  /**
    * Call the embedding API for the given texts.
    */
   async embed(request: EmbeddingRequest): Promise<EmbeddingResponse> {
@@ -82,12 +121,18 @@ export class EmbeddingClient {
 
     let response: Response;
     try {
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+      if (this.isAzure) {
+        headers['api-key'] = this.apiKey;
+      } else {
+        headers['Authorization'] = `Bearer ${this.apiKey}`;
+      }
+
       response = await fetch(this.endpoint, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${this.apiKey}`,
-        },
+        headers,
         body,
       });
     } catch (err: unknown) {

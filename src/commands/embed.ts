@@ -130,6 +130,8 @@ export async function handleEmbedCommand(
       apiKey: string;
       model: string;
       baseUrl?: string;
+      providerOptions?: Record<string, any>;
+      api?: string;
     } = {
       provider: providerName,
       apiKey,
@@ -137,6 +139,12 @@ export async function handleEmbedCommand(
     };
     if (providerConfig.baseUrl) {
       clientConfig.baseUrl = providerConfig.baseUrl;
+    }
+    if (providerConfig.providerOptions) {
+      clientConfig.providerOptions = providerConfig.providerOptions;
+    }
+    if (providerConfig.api) {
+      clientConfig.api = providerConfig.api;
     }
     const client = new EmbeddingClient(clientConfig);
 
