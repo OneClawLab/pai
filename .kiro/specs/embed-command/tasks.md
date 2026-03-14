@@ -11,7 +11,7 @@
     - 在 `src/types.ts` 中为 `PAIConfig` 接口添加 `defaultEmbedProvider?: string` 和 `defaultEmbedModel?: string` 字段
     - 新增 `EmbedOptions` 接口（extends CLIOptions），包含 `provider?`, `model?`, `inputFile?`, `batch?` 字段
     - _Requirements: 4.1, 4.2, 8.1-8.7_
-  - [ ]* 1.2 编写配置 round-trip 属性测试
+  - [x]* 1.2 编写配置 round-trip 属性测试
     - **Property 6: 配置 round-trip**
     - **Validates: Requirements 4.1, 4.2**
 
@@ -21,7 +21,7 @@
     - 实现 `truncateText(text: string, model: string): { text: string; truncated: boolean; originalTokens: number }` 函数
     - 使用简单字符级估算（1 token ≈ 4 字符）
     - _Requirements: 7.1, 7.2, 7.5_
-  - [ ]* 2.2 编写文本截断属性测试
+  - [x]* 2.2 编写文本截断属性测试
     - **Property 10: 文本截断正确性**
     - **Validates: Requirements 7.1, 7.2**
 
@@ -33,10 +33,10 @@
     - 实现 Provider 默认端点映射（openai → `https://api.openai.com`）
     - 将 API 错误转换为 PAIError（退出码 3），网络错误转换为 PAIError（退出码 2）
     - _Requirements: 6.1, 6.3, 6.4, 6.5_
-  - [ ]* 3.2 编写 baseUrl 端点构建属性测试
+  - [x]* 3.2 编写 baseUrl 端点构建属性测试
     - **Property 8: baseUrl 端点构建**
     - **Validates: Requirements 6.3**
-  - [ ]* 3.3 编写 API 错误映射属性测试
+  - [x]* 3.3 编写 API 错误映射属性测试
     - **Property 9: API 错误映射**
     - **Validates: Requirements 6.4**
 
@@ -49,7 +49,7 @@
     - 优先级：CLI `--provider`/`--model` > `defaultEmbedProvider`/`defaultEmbedModel` > `defaultProvider` 回退
     - 当无法解析到模型时抛出 PAIError（退出码 1）
     - _Requirements: 4.3, 4.4_
-  - [ ]* 5.2 编写嵌入模型解析优先级属性测试
+  - [x]* 5.2 编写嵌入模型解析优先级属性测试
     - **Property 7: 嵌入模型解析优先级**
     - **Validates: Requirements 4.3, 4.4**
 
@@ -60,13 +60,13 @@
     - 纯文本模式：每行一个 JSON 数组
     - JSON 模式：完整 JSON 对象（含 embedding/embeddings、model、usage）
     - _Requirements: 2.1, 2.6, 2.7, 3.1, 3.2_
-  - [ ]* 6.2 编写批量 JSON 解析属性测试
+  - [x]* 6.2 编写批量 JSON 解析属性测试
     - **Property 2: 批量 JSON 解析有效性**
     - **Validates: Requirements 2.1, 2.6**
-  - [ ]* 6.3 编写纯文本输出格式属性测试
+  - [x]* 6.3 编写纯文本输出格式属性测试
     - **Property 4: 纯文本输出格式**
     - **Validates: Requirements 3.1**
-  - [ ]* 6.4 编写 JSON 输出格式属性测试
+  - [x]* 6.4 编写 JSON 输出格式属性测试
     - **Property 5: JSON 输出格式**
     - **Validates: Requirements 3.2**
 
@@ -82,10 +82,10 @@
     - 调用 formatEmbeddingOutput 格式化输出
     - 使用 OutputFormatter 输出进度和错误信息
     - _Requirements: 1.1-1.4, 2.1-2.7, 3.3, 3.4, 7.3, 7.4, 9.1-9.5_
-  - [ ]* 7.2 编写多输入源互斥属性测试
+  - [x]* 7.2 编写多输入源互斥属性测试
     - **Property 1: 多输入源互斥**
     - **Validates: Requirements 1.4**
-  - [ ]* 7.3 编写批量结果顺序保持属性测试
+  - [x]* 7.3 编写批量结果顺序保持属性测试
     - **Property 3: 批量结果顺序保持**
     - **Validates: Requirements 2.5**
 

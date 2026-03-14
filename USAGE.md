@@ -513,6 +513,66 @@ Chat with an LLM. Supports tool calling (bash_exec is built-in).
 - `--log <path>` - Log file path (Markdown)
 - `--dry-run` - Show resolved config (provider, model, etc.) without calling LLM
 
+### `pai embed`
+
+Generate text embeddings using a provider's embedding API. Supports single and batch input, with plain text or JSON output.
+
+**Options:**
+- `--provider <name>` - Provider name
+- `--model <name>` - Embedding model name
+- `--config <path>` - Config file path
+- `--json` - Output as JSON (includes model and usage metadata)
+- `--quiet` - Suppress progress output
+- `--batch` - Batch mode (input is a JSON string array)
+- `--input-file <path>` - Read input from file
+
+**Input sources** (mutually exclusive — use only one):
+1. Positional argument: `pai embed "hello world"`
+2. stdin: `echo "hello" | pai embed`
+3. File: `pai embed --input-file document.txt`
+
+**Examples:**
+
+```bash
+# Single text embedding
+pai embed "hello world" --provider openai --model text-embedding-3-small
+
+# From stdin
+echo "hello world" | pai embed --provider openai --model text-embedding-3-small
+
+# From file
+pai embed --input-file document.txt --provider openai --model text-embedding-3-small
+
+# Batch mode (JSON string array)
+pai embed --batch '["hello","world","foo"]' --provider openai --model text-embedding-3-small
+
+# JSON output (includes model and usage info)
+pai embed "hello" --json --provider openai --model text-embedding-3-small
+
+# Using default embed provider/model (after configuring)
+pai model default --embed-provider openai --embed-model text-embedding-3-small
+pai embed "hello world"
+```
+
+**Output formats:**
+
+Plain text (default) — one JSON array per line:
+```
+[0.0023064255,-0.009327292,0.015797347,...]
+```
+
+JSON mode (`--json`) — single:
+```json
+{"embedding":[0.0023,-0.0094,...],"model":"text-embedding-3-small","usage":{"prompt_tokens":2,"total_tokens":2}}
+```
+
+JSON mode (`--json`) — batch:
+```json
+{"embeddings":[[0.0023,...],[0.0112,...]],"model":"text-embedding-3-small","usage":{"prompt_tokens":4,"total_tokens":4}}
+```
+
+**Text truncation:** If input text exceeds the model's token limit, it is automatically truncated with a warning on stderr.
+
 ### `pai model list`
 
 List providers and models.
@@ -554,14 +614,20 @@ pai model config --update --name openai --set defaultModel=gpt-4o --default
 
 ### `pai model default`
 
-View or set the default provider. When no `--name` is given, shows the current default. When `--name` is provided, sets that provider as the default.
+View or set the default provider and embedding model. When no options are given, shows the current defaults. When `--name` is provided, sets that provider as the default chat provider.
 
 ```bash
-# View current default provider
+# View current defaults (provider + embed)
 pai model default
 
 # Set default provider
 pai model default --name openai
+
+# Set default embedding provider and model
+pai model default --embed-provider openai --embed-model text-embedding-3-small
+
+# Set both at once
+pai model default --name openai --embed-provider openai --embed-model text-embedding-3-small
 
 # Output as JSON
 pai model default --json
@@ -569,6 +635,8 @@ pai model default --json
 
 **Options:**
 - `--name <name>` - Provider name to set as default (must already be configured)
+- `--embed-provider <name>` - Set default embedding provider
+- `--embed-model <model>` - Set default embedding model
 - `--json` - Output as JSON
 - `--config <path>` - Config file path
 
@@ -592,6 +660,8 @@ Default location: `~/config/pai/default.json`
 {
   "schema_version": "1.0.0",
   "defaultProvider": "openai",
+  "defaultEmbedProvider": "openai",
+  "defaultEmbedModel": "text-embedding-3-small",
   "providers": [
     {
       "name": "openai",

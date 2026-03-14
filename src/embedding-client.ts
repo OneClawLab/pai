@@ -58,7 +58,8 @@ export class EmbeddingClient {
    * If baseUrl is provided, use it; otherwise fall back to the provider default.
    */
   static resolveEndpoint(provider: string, baseUrl?: string): string {
-    const base = baseUrl ?? PROVIDER_DEFAULT_BASE_URLS[provider];
+    const base =
+      baseUrl ?? (Object.hasOwn(PROVIDER_DEFAULT_BASE_URLS, provider) ? PROVIDER_DEFAULT_BASE_URLS[provider] : undefined);
     if (!base) {
       throw new PAIError(
         `No base URL configured for provider "${provider}". Please specify a baseUrl.`,
