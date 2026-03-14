@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { handleModelList, handleModelConfig, handleModelLogin } from '../../src/commands/model.js';
+import { handleModelList, handleModelConfig, handleModelDefault, handleModelLogin } from '../../src/commands/model.js';
 import { mkdtemp, rm, writeFile, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -86,6 +86,263 @@ describe('Model Commands', () => {
       expect(consoleLogSpy).toHaveBeenCalled();
       const output = consoleLogSpy.mock.calls[0][0];
       expect(() => JSON.parse(output)).not.toThrow();
+    });
+  });
+
+  describe('handleModelDefault', () => {
+    it('should show current defaults including embed settings', async () => {
+      const config = {
+        schema_version: '1.0.0',
+        defaultProvider: 'openai',
+        defaultEmbedProvider: 'openai',
+        defaultEmbedModel: 'text-embedding-3-small',
+        providers: [{ name: 'openai' }],
+      };
+      await writeFile(configPath, JSON.stringify(config), 'utf-8');
+
+      await handleModelDefault({ config: configPath });
+
+      const output = consoleLogSpy.mock.calls.map((call: any) => call[0]).join('\n');
+      expect(output).toContain('Default provider: openai');
+      expect(output).toContain('Default embed:');
+      expect(output).toContain('provider: openai');
+      expect(output).toContain('model: text-embedding-3-small');
+    });
+
+    it('should show JSON output with embed fields', async () => {
+      const config = {
+        schema_version: '1.0.0',
+        defaultProvider: 'openai',
+        defaultEmbedProvider: 'openai',
+        defaultEmbedModel: 'text-embedding-3-small',
+        providers: [{ name: 'openai' }],
+      };
+      await writeFile(configPath, JSON.stringify(config), 'utf-8');
+
+      await handleModelDefault({ config: configPath, json: true });
+
+      const output = JSON.parse(consoleLogSpy.mock.calls[0][0]);
+      expect(output.defaultProvider).toBe('openai');
+      expect(output.defaultEmbedProvider).toBe('openai');
+      expect(output.defaultEmbedModel).toBe('text-embedding-3-small');
+    });
+
+    it('should show null for embed fields in JSON when not configured', async () => {
+      const config = {
+        schema_version: '1.0.0',
+        defaultProvider: 'openai',
+        providers: [{ name: 'openai' }],
+      };
+      await writeFile(configPath, JSON.stringify(config), 'utf-8');
+
+      await handleModelDefault({ config: configPath, json: true });
+
+      const output = JSON.parse(consoleLogSpy.mock.calls[0][0]);
+      expect(output.defaultProvider).toBe('openai');
+      expect(output.defaultEmbedProvider).toBeNull();
+      expect(output.defaultEmbedModel).toBeNull();
+    });
+
+    it('should set embed provider and model', async () => {
+      const config = {
+        schema_version: '1.0.0',
+        providers: [{ name: 'openai' }],
+      };
+      await writeFile(configPath, JSON.stringify(config), 'utf-8');
+
+      await handleModelDefault({
+        config: configPath,
+        embedProvider: 'openai',
+        embedModel: 'text-embedding-3-small',
+      });
+
+      const output = consoleLogSpy.mock.calls.map((call: any) => call[0]).join('\n');
+      expect(output).toContain('Default embed provider set to "openai"');
+      expect(output).toContain('Default embed model set to "text-embedding-3-small"');
+
+      // Verify persisted
+      const savedConfig = JSON.parse(await readFile(configPath, 'utf-8'));
+      expect(savedConfig.defaultEmbedProvider).toBe('openai');
+      expect(savedConfig.defaultEmbedModel).toBe('text-embedding-3-small');
+    });
+
+    it('should set embed provider only', async () => {
+      const config = {
+        schema_version: '1.0.0',
+        providers: [{ name: 'openai' }],
+      };
+      await writeFile(configPath, JSON.stringify(config), 'utf-8');
+
+      await handleModelDefault({
+        config: configPath,
+        embedProvider: 'openai',
+      });
+
+      const savedConfig = JSON.parse(await readFile(configPath, 'utf-8'));
+      expect(savedConfig.defaultEmbedProvider).toBe('openai');
+      expect(savedConfig.defaultEmbedModel).toBeUndefined();
+    });
+
+    it('should set embed model only', async () => {
+      const config = {
+        schema_version: '1.0.0',
+        providers: [{ name: 'openai' }],
+      };
+      await writeFile(configPath, JSON.stringify(config), 'utf-8');
+
+      await handleModelDefault({
+        config: configPath,
+        embedModel: 'text-embedding-3-small',
+      });
+
+      const savedConfig = JSON.parse(await readFile(configPath, 'utf-8'));
+      expect(savedConfig.defaultEmbedModel).toBe('text-embedding-3-small');
+    });
+
+    it('should set both default provider and embed settings simultaneously', async () => {
+      const config = {
+        schema_version: '1.0.0',
+        providers: [{ name: 'openai' }],
+      };
+      await writeFile(configPath, JSON.stringify(config), 'utf-8');
+
+      await handleModelDefault({
+        config: configPath,
+        name: 'openai',
+        embedProvider: 'openai',
+        embedModel: 'text-embedding-3-small',
+      });
+
+      const savedConfig = JSON.parse(await readFile(configPath, 'utf-8'));
+      expect(savedConfig.defaultProvider).toBe('openai');
+      expect(savedConfig.defaultEmbedProvider).toBe('openai');
+      expect(savedConfig.defaultEmbedModel).toBe('text-embedding-3-small');
+    });
+
+    it('should error when setting embed provider that does not exist', async () => {
+      const config = {
+        schema_version: '1.0.0',
+        providers: [{ name: 'openai' }],
+      };
+      await writeFile(configPath, JSON.stringify(config), 'utf-8');
+
+      await handleModelDefault({
+        config: configPath,
+        embedProvider: 'nonexistent',
+      });
+
+      expect(processExitSpy).toHaveBeenCalledWith(1);
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Provider not found: nonexistent')
+      );
+    });
+
+    it('should not show embed line when no embed defaults configured', async () => {
+      const config = {
+        schema_version: '1.0.0',
+        defaultProvider: 'openai',
+        providers: [{ name: 'openai' }],
+      };
+      await writeFile(configPath, JSON.stringify(config), 'utf-8');
+
+      await handleModelDefault({ config: configPath });
+
+      const output = consoleLogSpy.mock.calls.map((call: any) => call[0]).join('\n');
+      expect(output).toContain('Default provider: openai');
+      expect(output).not.toContain('Default embed');
+    });
+  });
+
+  describe('handleModelList - embed defaults', () => {
+    it('should display embed defaults in human-readable output', async () => {
+      const config = {
+        schema_version: '1.0.0',
+        defaultEmbedProvider: 'openai',
+        defaultEmbedModel: 'text-embedding-3-small',
+        providers: [{ name: 'openai', models: ['gpt-4'] }],
+      };
+      await writeFile(configPath, JSON.stringify(config), 'utf-8');
+
+      await handleModelList({ config: configPath });
+
+      const output = consoleLogSpy.mock.calls.map((call: any) => call[0]).join('\n');
+      expect(output).toContain('Default Embed: openai/text-embedding-3-small');
+    });
+
+    it('should include embed defaults in JSON output', async () => {
+      const config = {
+        schema_version: '1.0.0',
+        defaultEmbedProvider: 'openai',
+        defaultEmbedModel: 'text-embedding-3-small',
+        providers: [{ name: 'openai', models: ['gpt-4'] }],
+      };
+      await writeFile(configPath, JSON.stringify(config), 'utf-8');
+
+      await handleModelList({ config: configPath, json: true });
+
+      const output = JSON.parse(consoleLogSpy.mock.calls[0][0]);
+      expect(output.defaultEmbedProvider).toBe('openai');
+      expect(output.defaultEmbedModel).toBe('text-embedding-3-small');
+      expect(output.providers).toBeDefined();
+    });
+
+    it('should show null for embed fields in JSON when not configured', async () => {
+      const config = {
+        schema_version: '1.0.0',
+        providers: [{ name: 'openai', models: ['gpt-4'] }],
+      };
+      await writeFile(configPath, JSON.stringify(config), 'utf-8');
+
+      await handleModelList({ config: configPath, json: true });
+
+      const output = JSON.parse(consoleLogSpy.mock.calls[0][0]);
+      expect(output.defaultEmbedProvider).toBeNull();
+      expect(output.defaultEmbedModel).toBeNull();
+    });
+
+    it('should not show embed line when no embed defaults configured', async () => {
+      const config = {
+        schema_version: '1.0.0',
+        providers: [{ name: 'openai', models: ['gpt-4'] }],
+      };
+      await writeFile(configPath, JSON.stringify(config), 'utf-8');
+
+      await handleModelList({ config: configPath });
+
+      const output = consoleLogSpy.mock.calls.map((call: any) => call[0]).join('\n');
+      expect(output).not.toContain('Default Embed');
+    });
+
+    it('should include embed defaults in JSON output with --all flag', async () => {
+      const config = {
+        schema_version: '1.0.0',
+        defaultEmbedProvider: 'openai',
+        defaultEmbedModel: 'text-embedding-3-small',
+        providers: [],
+      };
+      await writeFile(configPath, JSON.stringify(config), 'utf-8');
+
+      await handleModelList({ config: configPath, json: true, all: true });
+
+      const output = JSON.parse(consoleLogSpy.mock.calls[0][0]);
+      expect(output.defaultEmbedProvider).toBe('openai');
+      expect(output.defaultEmbedModel).toBe('text-embedding-3-small');
+      expect(output.providers).toBeDefined();
+    });
+
+    it('should show embed defaults in human-readable output with --all flag', async () => {
+      const config = {
+        schema_version: '1.0.0',
+        defaultEmbedProvider: 'openai',
+        defaultEmbedModel: 'text-embedding-3-small',
+        providers: [],
+      };
+      await writeFile(configPath, JSON.stringify(config), 'utf-8');
+
+      await handleModelList({ config: configPath, all: true });
+
+      const output = consoleLogSpy.mock.calls.map((call: any) => call[0]).join('\n');
+      expect(output).toContain('Default Embed: openai/text-embedding-3-small');
     });
   });
 

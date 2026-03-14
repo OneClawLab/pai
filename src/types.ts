@@ -40,6 +40,8 @@ export interface OAuthCredentialStore {
 export interface PAIConfig {
   schema_version: string;
   defaultProvider?: string;
+  defaultEmbedProvider?: string;
+  defaultEmbedModel?: string;
   providers: ProviderConfig[];
 }
 
@@ -123,6 +125,13 @@ export interface CLIOptions {
   quiet?: boolean;
 }
 
+export interface EmbedOptions extends CLIOptions {
+  provider?: string;
+  model?: string;
+  inputFile?: string;
+  batch?: boolean;
+}
+
 export interface ChatOptions extends CLIOptions {
   session?: string;
   system?: string;
@@ -150,6 +159,8 @@ export interface ModelConfigOptions extends CLIOptions {
   provider?: string;
   set?: string[];
   default?: boolean;
+  embedProvider?: string;
+  embedModel?: string;
 }
 
 // ============================================================================

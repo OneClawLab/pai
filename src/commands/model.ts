@@ -26,20 +26,29 @@ export async function handleModelList(options: ModelConfigOptions): Promise<void
       const allProviders = getProviders();
       
       if (options.json) {
-        const output = allProviders.map((provider) => {
-          const models = getModels(provider as any);
-          const configured = config.providers.some((p) => p.name === provider);
+        const output = {
+          defaultEmbedProvider: config.defaultEmbedProvider ?? null,
+          defaultEmbedModel: config.defaultEmbedModel ?? null,
+          providers: allProviders.map((provider) => {
+            const models = getModels(provider as any);
+            const configured = config.providers.some((p) => p.name === provider);
 
-          return {
-            name: provider,
-            provider,
-            configured,
-            models: models.map((m) => m.id),
-          };
-        });
+            return {
+              name: provider,
+              provider,
+              configured,
+              models: models.map((m) => m.id),
+            };
+          }),
+        };
 
         console.log(JSON.stringify(output, null, 2));
       } else {
+        if (config.defaultEmbedProvider || config.defaultEmbedModel) {
+          const ep = config.defaultEmbedProvider ?? '(not set)';
+          const em = config.defaultEmbedModel ?? '(not set)';
+          console.log(`Default Embed: ${ep}/${em}\n`);
+        }
         console.log('Available Providers:\n');
         for (const provider of allProviders) {
           const models = getModels(provider as any);
@@ -63,16 +72,25 @@ export async function handleModelList(options: ModelConfigOptions): Promise<void
       }
 
       if (options.json) {
-        const output = config.providers.map((p) => ({
-          name: p.name,
-          provider: p.name,
-          configured: true,
-          models: p.models || [],
-          defaultModel: p.defaultModel,
-        }));
+        const output = {
+          defaultEmbedProvider: config.defaultEmbedProvider ?? null,
+          defaultEmbedModel: config.defaultEmbedModel ?? null,
+          providers: config.providers.map((p) => ({
+            name: p.name,
+            provider: p.name,
+            configured: true,
+            models: p.models || [],
+            defaultModel: p.defaultModel,
+          })),
+        };
 
         console.log(JSON.stringify(output, null, 2));
       } else {
+        if (config.defaultEmbedProvider || config.defaultEmbedModel) {
+          const ep = config.defaultEmbedProvider ?? '(not set)';
+          const em = config.defaultEmbedModel ?? '(not set)';
+          console.log(`Default Embed: ${ep}/${em}\n`);
+        }
         console.log('Configured Providers:\n');
         for (const provider of config.providers) {
           console.log(`✓ ${provider.name}`);
@@ -320,28 +338,50 @@ export async function handleModelConfig(options: ModelConfigOptions): Promise<vo
 
 
 /**
- * Handle model default command — view or set the default provider
+ * Handle model default command — view or set the default provider and embed settings
  */
 export async function handleModelDefault(options: ModelConfigOptions): Promise<void> {
   const configManager = new ConfigurationManager(options);
 
   try {
-    if (options.name) {
-      // Set default provider
-      await configManager.setDefaultProvider(options.name);
-      console.log(`Default provider set to "${options.name}".`);
+    const hasSetEmbed = options.embedProvider || options.embedModel;
+
+    if (options.name || hasSetEmbed) {
+      // Set default provider and/or embed settings
+      if (options.name) {
+        await configManager.setDefaultProvider(options.name);
+      }
+      if (hasSetEmbed) {
+        await configManager.setDefaultEmbed(options.embedProvider, options.embedModel);
+      }
+
+      const parts: string[] = [];
+      if (options.name) parts.push(`Default provider set to "${options.name}".`);
+      if (options.embedProvider) parts.push(`Default embed provider set to "${options.embedProvider}".`);
+      if (options.embedModel) parts.push(`Default embed model set to "${options.embedModel}".`);
+      console.log(parts.join('\n'));
     } else {
-      // Show current default provider
+      // Show current defaults
       const config = await configManager.loadConfig();
 
       if (options.json) {
-        console.log(JSON.stringify({ defaultProvider: config.defaultProvider ?? null }));
+        console.log(JSON.stringify({
+          defaultProvider: config.defaultProvider ?? null,
+          defaultEmbedProvider: config.defaultEmbedProvider ?? null,
+          defaultEmbedModel: config.defaultEmbedModel ?? null,
+        }));
       } else {
         if (config.defaultProvider) {
           console.log(`Default provider: ${config.defaultProvider}`);
         } else {
           console.log('No default provider configured.');
           console.log('Use "pai model default --name <provider>" to set one.');
+        }
+        if (config.defaultEmbedProvider || config.defaultEmbedModel) {
+          const embedParts: string[] = [];
+          if (config.defaultEmbedProvider) embedParts.push(`provider: ${config.defaultEmbedProvider}`);
+          if (config.defaultEmbedModel) embedParts.push(`model: ${config.defaultEmbedModel}`);
+          console.log(`Default embed: ${embedParts.join(', ')}`);
         }
       }
     }

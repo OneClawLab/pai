@@ -6,8 +6,8 @@
 
 ## 任务
 
-- [ ] 1. 扩展类型定义和配置支持
-  - [ ] 1.1 扩展 PAIConfig 和 EmbedOptions 类型
+- [x] 1. 扩展类型定义和配置支持
+  - [x] 1.1 扩展 PAIConfig 和 EmbedOptions 类型
     - 在 `src/types.ts` 中为 `PAIConfig` 接口添加 `defaultEmbedProvider?: string` 和 `defaultEmbedModel?: string` 字段
     - 新增 `EmbedOptions` 接口（extends CLIOptions），包含 `provider?`, `model?`, `inputFile?`, `batch?` 字段
     - _Requirements: 4.1, 4.2, 8.1-8.7_
@@ -15,8 +15,8 @@
     - **Property 6: 配置 round-trip**
     - **Validates: Requirements 4.1, 4.2**
 
-- [ ] 2. 实现嵌入模型 token 限制和截断逻辑
-  - [ ] 2.1 创建 `src/embedding-models.ts`
+- [x] 2. 实现嵌入模型 token 限制和截断逻辑
+  - [x] 2.1 创建 `src/embedding-models.ts`
     - 定义 `EMBEDDING_MODEL_LIMITS` 常量（内置常用嵌入模型的最大 token 限制）
     - 实现 `truncateText(text: string, model: string): { text: string; truncated: boolean; originalTokens: number }` 函数
     - 使用简单字符级估算（1 token ≈ 4 字符）
@@ -25,8 +25,8 @@
     - **Property 10: 文本截断正确性**
     - **Validates: Requirements 7.1, 7.2**
 
-- [ ] 3. 实现 EmbeddingClient
-  - [ ] 3.1 创建 `src/embedding-client.ts`
+- [x] 3. 实现 EmbeddingClient
+  - [x] 3.1 创建 `src/embedding-client.ts`
     - 实现 `EmbeddingClient` 类，构造函数接收 `{ provider, apiKey, model, baseUrl? }`
     - 实现 `embed(request: EmbeddingRequest): Promise<EmbeddingResponse>` 方法
     - 使用 Node.js 原生 `fetch` 调用 OpenAI 兼容的 `/v1/embeddings` 端点
@@ -40,11 +40,11 @@
     - **Property 9: API 错误映射**
     - **Validates: Requirements 6.4**
 
-- [ ] 4. Checkpoint - 确保所有测试通过
+- [x] 4. Checkpoint - 确保所有测试通过
   - 确保所有测试通过，如有问题请询问用户。
 
-- [ ] 5. 实现嵌入模型解析逻辑
-  - [ ] 5.1 创建 `src/embed-model-resolver.ts`
+- [x] 5. 实现嵌入模型解析逻辑
+  - [x] 5.1 创建 `src/embed-model-resolver.ts`
     - 实现 `resolveEmbedModel(options: EmbedOptions, config: PAIConfig): { provider: string; model: string }` 函数
     - 优先级：CLI `--provider`/`--model` > `defaultEmbedProvider`/`defaultEmbedModel` > `defaultProvider` 回退
     - 当无法解析到模型时抛出 PAIError（退出码 1）
@@ -53,8 +53,8 @@
     - **Property 7: 嵌入模型解析优先级**
     - **Validates: Requirements 4.3, 4.4**
 
-- [ ] 6. 实现批量输入解析和输出格式化
-  - [ ] 6.1 创建 `src/embed-io.ts`
+- [x] 6. 实现批量输入解析和输出格式化
+  - [x] 6.1 创建 `src/embed-io.ts`
     - 实现 `parseBatchInput(raw: string): string[]` 函数，解析 JSON 字符串数组
     - 实现 `formatEmbeddingOutput(result: EmbeddingResponse, options: { json: boolean; batch: boolean }): string` 函数
     - 纯文本模式：每行一个 JSON 数组
@@ -70,8 +70,8 @@
     - **Property 5: JSON 输出格式**
     - **Validates: Requirements 3.2**
 
-- [ ] 7. 实现 embed 命令处理器
-  - [ ] 7.1 创建 `src/commands/embed.ts`
+- [x] 7. 实现 embed 命令处理器
+  - [x] 7.1 创建 `src/commands/embed.ts`
     - 实现 `handleEmbedCommand(text: string | undefined, options: EmbedOptions): Promise<void>`
     - 复用 ConfigurationManager 加载配置和解析凭证
     - 复用 InputResolver 读取 stdin/文件输入
@@ -89,18 +89,18 @@
     - **Property 3: 批量结果顺序保持**
     - **Validates: Requirements 2.5**
 
-- [ ] 8. 注册 CLI 命令和扩展 model 命令
-  - [ ] 8.1 在 `src/index.ts` 中注册 `pai embed` 命令
+- [x] 8. 注册 CLI 命令和扩展 model 命令
+  - [x] 8.1 在 `src/index.ts` 中注册 `pai embed` 命令
     - 使用 Commander.js 添加 embed 命令及所有选项
     - 连接到 handleEmbedCommand 处理器
     - _Requirements: 8.1-8.7_
-  - [ ] 8.2 扩展 `src/commands/model.ts` 中的 model default 和 model list 命令
+  - [x] 8.2 扩展 `src/commands/model.ts` 中的 model default 和 model list 命令
     - model default：新增 `--embed-provider` 和 `--embed-model` 选项，支持查看和设置
     - model list：在输出中显示 defaultEmbedProvider/defaultEmbedModel
     - JSON 输出中包含对应字段
     - _Requirements: 5.1-5.5_
 
-- [ ] 9. Final checkpoint - 确保所有测试通过
+- [x] 9. Final checkpoint - 确保所有测试通过
   - 确保所有测试通过，如有问题请询问用户。
 
 ## 备注

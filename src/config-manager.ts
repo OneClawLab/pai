@@ -215,6 +215,32 @@ export class ConfigurationManager {
   }
 
   /**
+   * Set the default embed provider and/or model
+   */
+  async setDefaultEmbed(embedProvider?: string, embedModel?: string): Promise<void> {
+    const config = await this.loadConfig();
+
+    if (embedProvider) {
+      // Verify provider exists
+      const exists = config.providers.some((p) => p.name === embedProvider);
+      if (!exists) {
+        throw new PAIError(
+          `Provider not found: ${embedProvider}`,
+          1 as ExitCode,
+          { provider: embedProvider, configPath: this.configPath }
+        );
+      }
+      config.defaultEmbedProvider = embedProvider;
+    }
+
+    if (embedModel) {
+      config.defaultEmbedModel = embedModel;
+    }
+
+    await this.saveConfig(config);
+  }
+
+  /**
    * Delete a provider configuration
    */
   async deleteProvider(name: string): Promise<void> {

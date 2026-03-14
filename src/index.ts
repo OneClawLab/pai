@@ -3,8 +3,9 @@ import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { handleChatCommand } from './commands/chat.js';
+import { handleEmbedCommand } from './commands/embed.js';
 import { handleModelList, handleModelConfig, handleModelDefault, handleModelLogin } from './commands/model.js';
-import type { ChatOptions, ModelConfigOptions } from './types.js';
+import type { ChatOptions, EmbedOptions, ModelConfigOptions } from './types.js';
 
 // Get package.json info for version
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -58,6 +59,22 @@ program
     await handleChatCommand(prompt, options);
   });
 
+// Embed command
+program
+  .command('embed')
+  .description('Generate text embeddings')
+  .argument('[text]', 'Text to embed (or use stdin/--input-file)')
+  .option('--provider <name>', 'Provider name')
+  .option('--model <name>', 'Embedding model name')
+  .option('--config <path>', 'Config file path')
+  .option('--json', 'Output as JSON')
+  .option('--quiet', 'Suppress progress output')
+  .option('--batch', 'Enable batch embedding mode (input is JSON string array)')
+  .option('--input-file <path>', 'Read input from file')
+  .action(async (text: string | undefined, options: EmbedOptions) => {
+    await handleEmbedCommand(text, options);
+  });
+
 // Model list command
 const modelCommand = program
   .command('model')
@@ -107,6 +124,8 @@ modelCommand
   .description('View or set the default provider')
   .option('--config <path>', 'Config file path')
   .option('--name <name>', 'Provider name to set as default')
+  .option('--embed-provider <name>', 'Set default embed provider')
+  .option('--embed-model <model>', 'Set default embed model')
   .option('--json', 'Output as JSON')
   .action(async (options: ModelConfigOptions) => {
     await handleModelDefault(options);
