@@ -180,7 +180,4 @@ program.on('command:*', () => {
   }
 })();
 
-// Show help if no arguments (exit 0)
-if (!process.argv.slice(2).length) {
-  program.outputHelp();
-}
+
