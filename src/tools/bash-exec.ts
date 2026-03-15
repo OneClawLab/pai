@@ -2,7 +2,10 @@ import { exec, execSync } from 'node:child_process';
 import { platform } from 'node:os';
 import type { Tool, BashExecArgs, BashExecResult } from '../types.js';
 
-const MAX_STDOUT_LENGTH = 10 * 1024 * 1024; // 10MB buffer for large outputs
+// MAX LENGTH in MB that bash_exec tool can output to LLM
+const BASH_EXEC_TOOL_MAX_OUTPUT_MB = 8;
+// MAX TIMEOUT in seconds for bash_exec tool
+const BASH_EXEC_TOOL_MAX_TIMEOUT_S = 3600;
 
 /**
  * Detect the bash shell path.
@@ -66,14 +69,14 @@ export function createBashExecTool(): Tool {
   return {
     name: 'bash_exec',
     description:
-      'Execute a shell command and return the result. Supports pipes, redirections, and shell scripts. Use cwd parameter to set working directory. Running on bash.',
+      'Execute a shell command and return the result. Supports pipes, redirections, xargs, heredocs, and shell scripts. Use cwd parameter to set working directory. Running on bash.',
     parameters: {
       type: 'object',
       properties: {
         command: {
           type: 'string',
           description:
-            'The shell command to execute. Supports bash syntax including pipes, redirections, etc.',
+            'The shell command to execute. Supports bash syntax including pipes, redirections, xargs, heredocs, etc.',
         },
         cwd: {
           type: 'string',
@@ -95,7 +98,8 @@ export function createBashExecTool(): Tool {
       return new Promise((resolve) => {
         const options: any = {
           shell,
-          maxBuffer: MAX_STDOUT_LENGTH,
+          maxBuffer: BASH_EXEC_TOOL_MAX_OUTPUT_MB * 1024 * 1024,
+          timeout: BASH_EXEC_TOOL_MAX_TIMEOUT_S * 1000,
           encoding: 'buffer',
         };
 
