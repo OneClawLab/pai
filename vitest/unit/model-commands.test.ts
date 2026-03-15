@@ -25,6 +25,7 @@ describe('Model Commands', () => {
   let consoleLogSpy: any;
   let consoleErrorSpy: any;
   let processExitSpy: any;
+  let stderrSpy: any;
 
   beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), 'pai-model-test-'));
@@ -32,6 +33,7 @@ describe('Model Commands', () => {
     consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
     consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     processExitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {}) as any);
+    stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
   });
 
   afterEach(async () => {
@@ -39,6 +41,7 @@ describe('Model Commands', () => {
     consoleLogSpy.mockRestore();
     consoleErrorSpy.mockRestore();
     processExitSpy.mockRestore();
+    stderrSpy.mockRestore();
   });
 
   describe('handleModelList', () => {
