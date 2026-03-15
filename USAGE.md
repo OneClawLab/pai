@@ -743,7 +743,7 @@ The LLM can execute shell commands using the `bash_exec` tool.
 pai chat "What files are in the current directory?" --provider openai --model gpt-4o
 ```
 
-The LLM will use `bash_exec` to run `ls` (or `dir` on Windows) and return the results.
+The LLM will use `bash_exec` to run `ls` and return the results.
 
 **Security Note:** bash_exec has no security restrictions. The LLM can execute any command. Use with caution.
 

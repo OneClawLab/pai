@@ -6,9 +6,6 @@ import { join } from 'node:path';
 import { tmpdir, platform } from 'node:os';
 import * as fc from 'fast-check';
 
-// Use the actual detected shell to decide command syntax in tests.
-// On Windows with Git Bash / MSYS2, isCmdExe will be false even though platform() === 'win32'.
-const { isCmdExe } = detectShell();
 const isWin32 = platform() === 'win32';
 
 describe('bash_exec tool', () => {
@@ -17,9 +14,19 @@ describe('bash_exec tool', () => {
   it('should have correct tool definition', () => {
     expect(tool.name).toBe('bash_exec');
     expect(tool.description).toBeTruthy();
+    expect(tool.description).toContain('bash');
     expect(tool.parameters).toHaveProperty('type', 'object');
     expect(tool.parameters).toHaveProperty('properties');
     expect(tool.handler).toBeTypeOf('function');
+  });
+
+  describe('detectShell', () => {
+    it('should return a string (shell path)', () => {
+      const shell = detectShell();
+      expect(typeof shell).toBe('string');
+      expect(shell.length).toBeGreaterThan(0);
+      expect(/bash/i.test(shell)).toBe(true);
+    });
   });
 
   describe('command execution', () => {
@@ -31,10 +38,9 @@ describe('bash_exec tool', () => {
     });
 
     it('should return stdout and stderr', async () => {
-      const cmd = isCmdExe
-        ? 'echo stdout && echo stderr 1>&2'
-        : 'echo "stdout" && echo "stderr" >&2';
-      const result = await tool.handler({ command: cmd });
+      const result = await tool.handler({
+        command: 'echo "stdout" && echo "stderr" >&2',
+      });
       expect(result.exitCode).toBe(0);
       expect(result.stdout).toContain('stdout');
       expect(result.stderr).toContain('stderr');
@@ -46,10 +52,7 @@ describe('bash_exec tool', () => {
     });
 
     it('should capture error output on command failure', async () => {
-      const cmd = isCmdExe
-        ? 'dir /nonexistent-directory-xyz'
-        : 'ls /nonexistent-directory-xyz';
-      const result = await tool.handler({ command: cmd });
+      const result = await tool.handler({ command: 'ls /nonexistent-directory-xyz' });
       expect(result.exitCode).not.toBe(0);
       expect(result.stderr).toBeTruthy();
     });
@@ -57,53 +60,41 @@ describe('bash_exec tool', () => {
 
   describe('shell features', () => {
     it('should support pipes', async () => {
-      const cmd = isCmdExe
-        ? 'echo hello world | findstr world'
-        : 'echo "hello world" | grep world';
-      const result = await tool.handler({ command: cmd });
+      const result = await tool.handler({
+        command: 'echo "hello world" | grep world',
+      });
       expect(result.exitCode).toBe(0);
       expect(result.stdout).toContain('world');
     });
 
     it('should support command substitution', async () => {
-      if (isCmdExe) {
-        const result = await tool.handler({
-          command: 'for /F "delims=" %i in (\'echo 42\') do @echo Result: %i',
-        });
-        expect(result.exitCode).toBe(0);
-        expect(result.stdout).toContain('Result: 42');
-      } else {
-        const result = await tool.handler({
-          command: 'echo "Result: $(echo 42)"',
-        });
-        expect(result.exitCode).toBe(0);
-        expect(result.stdout).toContain('Result: 42');
-      }
+      const result = await tool.handler({
+        command: 'echo "Result: $(echo 42)"',
+      });
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).toContain('Result: 42');
     });
 
     it('should support multiple commands', async () => {
-      const cmd = isCmdExe
-        ? 'echo first && echo second'
-        : 'echo "first" && echo "second"';
-      const result = await tool.handler({ command: cmd });
+      const result = await tool.handler({
+        command: 'echo "first" && echo "second"',
+      });
       expect(result.exitCode).toBe(0);
       expect(result.stdout).toContain('first');
       expect(result.stdout).toContain('second');
     });
 
     it('should support environment variables', async () => {
-      const pathCmd = isCmdExe ? 'echo %PATH%' : 'echo $PATH';
-      const result = await tool.handler({ command: pathCmd });
+      const result = await tool.handler({ command: 'echo $PATH' });
       expect(result.exitCode).toBe(0);
       expect(result.stdout.trim().length).toBeGreaterThan(0);
-      expect(result.stdout.trim()).not.toBe('%PATH%');
       expect(result.stdout.trim()).not.toBe('$PATH');
 
-      if (!isCmdExe) {
-        const result2 = await tool.handler({ command: 'TEST_VAR="test value" && echo $TEST_VAR' });
-        expect(result2.exitCode).toBe(0);
-        expect(result2.stdout).toContain('test value');
-      }
+      const result2 = await tool.handler({
+        command: 'TEST_VAR="test value" && echo $TEST_VAR',
+      });
+      expect(result2.exitCode).toBe(0);
+      expect(result2.stdout).toContain('test value');
     });
   });
 
@@ -111,13 +102,9 @@ describe('bash_exec tool', () => {
     it('should execute command in specified working directory', async () => {
       const tempDir = await mkdtemp(join(tmpdir(), 'pai-bash-test-'));
       try {
-        const cmd = isCmdExe ? 'cd' : 'pwd';
-        const result = await tool.handler({ command: cmd, cwd: tempDir });
+        const result = await tool.handler({ command: 'pwd', cwd: tempDir });
         expect(result.exitCode).toBe(0);
-
         // On Windows with bash (Git Bash/MSYS2), pwd returns MSYS-style paths
-        // e.g. /c/Users/... instead of C:\Users\...
-        // Normalize both to compare just the directory name suffix
         const dirName = tempDir.replace(/\\/g, '/').split('/').pop()!;
         expect(result.stdout).toContain(dirName);
       } finally {
@@ -130,8 +117,7 @@ describe('bash_exec tool', () => {
       const tempDir = await mkdtemp(join(tmpdir(), 'pai-bash-test-'));
       try {
         await writeFile(join(tempDir, 'test.txt'), 'test content', 'utf-8');
-        const cmd = isCmdExe ? 'type test.txt' : 'cat test.txt';
-        const result = await tool.handler({ command: cmd, cwd: tempDir });
+        const result = await tool.handler({ command: 'cat test.txt', cwd: tempDir });
         expect(result.exitCode).toBe(0);
         expect(result.stdout).toContain('test content');
       } finally {
@@ -143,8 +129,7 @@ describe('bash_exec tool', () => {
 
   describe('edge cases', () => {
     it('should handle empty stdout', async () => {
-      const cmd = isCmdExe ? 'echo.' : 'true';
-      const result = await tool.handler({ command: cmd });
+      const result = await tool.handler({ command: 'true' });
       expect(result.exitCode).toBe(0);
     });
 
@@ -155,10 +140,9 @@ describe('bash_exec tool', () => {
     });
 
     it('should handle multiline output', async () => {
-      const cmd = isCmdExe
-        ? 'echo Line 1 && echo Line 2 && echo Line 3'
-        : 'printf "Line 1\\nLine 2\\nLine 3\\n"';
-      const result = await tool.handler({ command: cmd });
+      const result = await tool.handler({
+        command: 'printf "Line 1\\nLine 2\\nLine 3\\n"',
+      });
       expect(result.exitCode).toBe(0);
       expect(result.stdout).toContain('Line 1');
       expect(result.stdout).toContain('Line 2');
@@ -166,10 +150,7 @@ describe('bash_exec tool', () => {
     });
 
     it('should handle large output', async () => {
-      const cmd = isCmdExe
-        ? 'for /L %i in (1,1,100) do @echo %i'
-        : 'seq 1 100';
-      const result = await tool.handler({ command: cmd });
+      const result = await tool.handler({ command: 'seq 1 100' });
       expect(result.exitCode).toBe(0);
       expect(result.stdout).toContain('1');
       expect(result.stdout).toContain('100');
@@ -184,10 +165,7 @@ describe('bash_exec tool', () => {
     });
 
     it('should handle command that outputs only to stderr', async () => {
-      const cmd = isCmdExe
-        ? 'echo error message 1>&2'
-        : 'echo "error message" >&2';
-      const result = await tool.handler({ command: cmd });
+      const result = await tool.handler({ command: 'echo "error message" >&2' });
       expect(result.exitCode).toBe(0);
       expect(result.stderr).toContain('error');
       expect(result.stdout).toBe('');
@@ -197,21 +175,12 @@ describe('bash_exec tool', () => {
       const tempDir = await mkdtemp(join(tmpdir(), 'pai-bash-test-'));
       try {
         const outputFile = join(tempDir, 'output.txt');
-        let cmd: string;
-        let cmd2: string;
-        if (isCmdExe) {
-          cmd = `echo test content > ${outputFile}`;
-          cmd2 = `type ${outputFile}`;
-        } else {
-          // Convert Windows path to MSYS-style for bash on Windows (C:\foo → /c/foo)
-          const bashPath = isWin32
-            ? outputFile.replace(/\\/g, '/').replace(/^([A-Za-z]):/, (_, d: string) => `/${d.toLowerCase()}`)
-            : outputFile;
-          cmd = `echo "test content" > "${bashPath}"`;
-          cmd2 = `cat "${bashPath}"`;
-        }
-        await tool.handler({ command: cmd });
-        const result2 = await tool.handler({ command: cmd2 });
+        // Convert Windows path to MSYS-style for bash on Windows
+        const bashPath = isWin32
+          ? outputFile.replace(/\\/g, '/').replace(/^([A-Za-z]):/, (_, d: string) => `/${d.toLowerCase()}`)
+          : outputFile;
+        await tool.handler({ command: `echo "test content" > "${bashPath}"` });
+        const result2 = await tool.handler({ command: `cat "${bashPath}"` });
         expect(result2.stdout).toContain('test content');
       } finally {
         if (isWin32) await new Promise((r) => setTimeout(r, 100));
@@ -219,8 +188,7 @@ describe('bash_exec tool', () => {
       }
     });
 
-    it('should handle heredoc on Unix', async () => {
-      if (isCmdExe) return;
+    it('should handle heredoc', async () => {
       const result = await tool.handler({
         command: 'cat << EOF\nLine 1\nLine 2\nLine 3\nEOF',
       });
@@ -252,13 +220,8 @@ describe('bash_exec tool', () => {
     });
 
     it('should handle command with OR operator on failure', async () => {
-      const cmd = isCmdExe ? '(exit 1) || echo fallback' : 'false || echo fallback';
-      const result = await tool.handler({ command: cmd });
-      if (!isCmdExe) {
-        expect(result.stdout).toContain('fallback');
-      } else {
-        expect(result.exitCode).toBeDefined();
-      }
+      const result = await tool.handler({ command: 'false || echo fallback' });
+      expect(result.stdout).toContain('fallback');
     });
   });
 
@@ -275,7 +238,7 @@ describe('bash_exec tool', () => {
             fc.integer({ min: 0, max: 5 }).map(n => `exit ${n}`),
             fc.string({ minLength: 1, maxLength: 10 })
               .filter(s => /^[a-zA-Z0-9]+$/.test(s))
-              .map(s => isCmdExe ? `echo ${s} 1>&2` : `echo "${s}" >&2`),
+              .map(s => `echo "${s}" >&2`),
           ),
           async (command) => {
             const result = await t.handler({ command });
@@ -301,16 +264,15 @@ describe('bash_exec tool', () => {
           fc.string({ minLength: 3, maxLength: 10 })
             .filter(s => /^[a-zA-Z]+$/.test(s)),
           async (word) => {
-
-            const pipeCmd = isCmdExe
-              ? `echo ${word} | findstr ${word}`
-              : `echo "${word}" | grep "${word}"`;
-            const pipeResult = await t.handler({ command: pipeCmd });
+            const pipeResult = await t.handler({
+              command: `echo "${word}" | grep "${word}"`,
+            });
             expect(pipeResult.exitCode).toBe(0);
             expect(pipeResult.stdout).toContain(word);
 
-            const chainCmd = `echo ${word}_first && echo ${word}_second`;
-            const chainResult = await t.handler({ command: chainCmd });
+            const chainResult = await t.handler({
+              command: `echo ${word}_first && echo ${word}_second`,
+            });
             expect(chainResult.exitCode).toBe(0);
             expect(chainResult.stdout).toContain(`${word}_first`);
             expect(chainResult.stdout).toContain(`${word}_second`);
@@ -327,8 +289,7 @@ describe('bash_exec tool', () => {
           fc.string({ minLength: 1, maxLength: 30 })
             .filter(s => /^[a-zA-Z0-9]+$/.test(s)),
           async (text) => {
-            const cmd = isCmdExe ? `echo ${text}` : `echo "${text}"`;
-            const result = await t.handler({ command: cmd });
+            const result = await t.handler({ command: `echo "${text}"` });
             expect(result.exitCode).toBe(0);
             expect(result.stdout.trim()).toContain(text);
           }
