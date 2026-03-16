@@ -47,6 +47,9 @@ export function detectShell(): string {
   );
 }
 
+const BASH_EXEC_DESCRIPTION = 
+'Execute a shell command and return the result. Supports pipes, redirections, xargs, heredocs, and shell scripts. Use cwd parameter to set working directory. Running on bash.'
+
 /**
  * Create bash_exec tool for LLM to execute shell commands
  *
@@ -68,8 +71,7 @@ export function createBashExecTool(): Tool {
 
   return {
     name: 'bash_exec',
-    description:
-      'Execute a shell command and return the result. Supports pipes, redirections, xargs, heredocs, and shell scripts. Use cwd parameter to set working directory. Running on bash.',
+    description: BASH_EXEC_DESCRIPTION,
     parameters: {
       type: 'object',
       properties: {
@@ -82,8 +84,13 @@ export function createBashExecTool(): Tool {
           type: 'string',
           description: 'Optional working directory for command execution',
         },
+        comment: {
+          type: 'string',
+          description:
+            'very short briefing about intention and reason of this tool call, improve observability and auditability to the user.'
+        }
       },
-      required: ['command'],
+      required: ['command','comment'],
     },
     handler: async (args: BashExecArgs): Promise<BashExecResult> => {
       // Guard against empty command
