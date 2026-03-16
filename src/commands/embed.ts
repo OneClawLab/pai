@@ -5,7 +5,7 @@ import { InputResolver } from '../input-resolver.js';
 import { OutputFormatter } from '../output-formatter.js';
 import { EmbeddingClient } from '../embedding-client.js';
 import { resolveEmbedModel } from '../embed-model-resolver.js';
-import { truncateText } from '../embedding-models.js';
+import { truncateText, EMBEDDING_MODEL_LIMITS } from '../embedding-models.js';
 import { parseBatchInput, formatEmbeddingOutput } from '../embed-io.js';
 
 /**
@@ -93,12 +93,13 @@ export async function handleEmbedCommand(
       const result = truncateText(t, modelName);
       if (result.truncated) {
         const truncatedTokens = Math.ceil(result.text.length / 4);
+        const modelLimit = EMBEDDING_MODEL_LIMITS[modelName] ?? truncatedTokens;
         if (options.json) {
           // NDJSON warning event to stderr
           const warning = {
             type: 'warning',
             data: {
-              message: `Input text truncated from ~${result.originalTokens} tokens to ${truncatedTokens} tokens (model limit: ${truncatedTokens})`,
+              message: `Input text truncated from ~${result.originalTokens} tokens to ${truncatedTokens} tokens (model limit: ${modelLimit})`,
               originalTokens: result.originalTokens,
               truncatedTokens,
             },
@@ -106,7 +107,7 @@ export async function handleEmbedCommand(
           process.stderr.write(JSON.stringify(warning) + '\n');
         } else {
           process.stderr.write(
-            `[Warning] Input text truncated from ~${result.originalTokens} tokens to ${truncatedTokens} tokens (model limit: ${truncatedTokens})\n`
+            `[Warning] Input text truncated from ~${result.originalTokens} tokens to ${truncatedTokens} tokens (model limit: ${modelLimit})\n`
           );
         }
       }
