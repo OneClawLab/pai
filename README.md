@@ -2,6 +2,10 @@
 
 Unix-style CLI for interacting with LLMs. One built-in tool (`bash_exec`), basic session support, and text embedding.
 
+Note: 
+pai is a thin wrapper around @mariozechner/pi-ai (https://github.com/badlogic/pi-mono/tree/main/packages/ai).
+Thanks to Mario Zechner for providing this amazing work.
+
 ## Features
 
 - 20+ providers (OpenAI, Anthropic, Google, GitHub Copilot, Azure, Bedrock, etc.)
