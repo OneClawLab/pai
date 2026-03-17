@@ -8,7 +8,7 @@
 
 - **Embed_Command**: `pai embed` 子命令，负责接收文本输入并返回嵌入向量
 - **Embedding_Client**: 嵌入向量 API 客户端，负责直接调用各 Provider 的 Embedding HTTP 端点
-- **PAIConfig**: PAI 全局配置对象，存储于 `~/config/pai/default.json`
+- **PAIConfig**: PAI 全局配置对象，存储于 `~/.config/pai/default.json`
 - **ProviderConfig**: 单个 Provider 的配置，包含认证信息、模型列表等
 - **Embedding_Vector**: 嵌入向量，一个浮点数数组，表示文本的语义表示
 - **Batch_Input**: 批量输入，一个包含多条文本的数组

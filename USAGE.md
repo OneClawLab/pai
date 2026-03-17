@@ -496,7 +496,7 @@ Required environment variables:
 Chat with an LLM. Supports tool calling (bash_exec is built-in).
 
 **Options:**
-- `--config <path>` - Config file path (default: ~/config/pai/default.json)
+- `--config <path>` - Config file path (default: ~/.config/pai/default.json)
 - `--session <path>` - Session file for conversation history (JSONL format)
 - `--system <text>` - System instruction
 - `--system-file <path>` - System instruction from file
@@ -654,7 +654,7 @@ Interactive OAuth login for providers that require browser-based authentication.
 
 ### Config File
 
-Default location: `~/config/pai/default.json`
+Default location: `~/.config/pai/default.json`
 
 ```json
 {

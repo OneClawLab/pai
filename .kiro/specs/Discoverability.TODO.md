@@ -58,7 +58,7 @@
 ### 10. 配置文件路径未在 --help 中提及
 - 规范要求: SHOULD 告诉使用者配置数据在哪里
 - 现状: --help 中有 `--config <path>` 选项但没说默认路径
-- 整改: 在 help text 中注明默认配置路径 `~/config/pai/default.json`
+- 整改: 在 help text 中注明默认配置路径 `~/.config/pai/default.json`
 
 ### 11. --version 信息丰富但格式可以更好
 - 现状: `pai 1.0.0 (pi-ai 0.57.1, Node v22.17.0)` — 这个做得不错

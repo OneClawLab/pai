@@ -13,7 +13,7 @@ describe('ConfigurationManager', () => {
   beforeEach(async () => {
     // Create temporary directory for tests
     tempDir = await mkdtemp(join(tmpdir(), 'pai-test-'));
-    configPath = join(tempDir, 'config.json');
+    configPath = join(tempDir, 'default.json');
   });
 
   afterEach(async () => {
@@ -289,7 +289,7 @@ describe('ConfigurationManager', () => {
     });
 
     it('should create directory if it does not exist', async () => {
-      const nestedPath = join(tempDir, 'nested', 'dir', 'config.json');
+      const nestedPath = join(tempDir, 'nested', 'dir', 'default.json');
       const manager = new ConfigurationManager({ config: nestedPath });
 
       await manager.saveConfig({
@@ -436,7 +436,7 @@ describe('ConfigurationManager', () => {
       const manager = new ConfigurationManager({});
       const path = manager.getConfigPath();
       // Check path contains the expected segments (works on both Unix and Windows)
-      expect(path).toContain('config');
+      expect(path).toContain('.config');
       expect(path).toContain('pai');
       expect(path).toContain('default.json');
 
@@ -588,7 +588,7 @@ describe('ConfigurationManager', () => {
                 expect(resolvedPath).toBe(envPath);
               } else {
                 // Should use default path
-                expect(resolvedPath).toContain('config');
+                expect(resolvedPath).toContain('.config');
                 expect(resolvedPath).toContain('pai');
                 expect(resolvedPath).toContain('default.json');
               }
@@ -618,7 +618,7 @@ describe('ConfigurationManager', () => {
           ),
           async (providers) => {
             const testDir = await mkdtemp(join(tmpdir(), 'pai-pbt-'));
-            const testPath = join(testDir, 'config.json');
+            const testPath = join(testDir, 'default.json');
 
             try {
               const manager = new ConfigurationManager({ config: testPath });
@@ -661,7 +661,7 @@ describe('ConfigurationManager', () => {
           fc.option(fc.integer({ min: 1, max: 10000 }), { nil: undefined }),
           async (base, apiKey, models, temperature, maxTokens) => {
             const testDir = await mkdtemp(join(tmpdir(), 'pai-pbt-'));
-            const testPath = join(testDir, 'config.json');
+            const testPath = join(testDir, 'default.json');
 
             try {
               const manager = new ConfigurationManager({ config: testPath });
@@ -716,7 +716,7 @@ describe('ConfigurationManager', () => {
           }),
           async ({ provider, cliKey, envKey, configKey }) => {
             const testDir = await mkdtemp(join(tmpdir(), 'pai-pbt-'));
-            const testPath = join(testDir, 'config.json');
+            const testPath = join(testDir, 'default.json');
 
             // Save original env
             const envVarName = `PAI_${provider.toUpperCase().replace(/-/g, '_')}_API_KEY`;
@@ -775,7 +775,7 @@ describe('ConfigurationManager', () => {
           fc.string({ minLength: 20, maxLength: 50 }), // Simulate API key
           async (apiKey) => {
             const testDir = await mkdtemp(join(tmpdir(), 'pai-pbt-'));
-            const testPath = join(testDir, 'config.json');
+            const testPath = join(testDir, 'default.json');
 
             try {
               const config = {

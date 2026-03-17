@@ -40,7 +40,7 @@ describe('Integration Tests', () => {
 
   beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), 'pai-e2e-test-'));
-    configPath = join(tempDir, 'config.json');
+    configPath = join(tempDir, 'default.json');
     stdoutSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
     stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     vi.clearAllMocks();

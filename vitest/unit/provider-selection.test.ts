@@ -38,7 +38,7 @@ describe('Provider and Model Selection', () => {
 
   beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), 'pai-provider-test-'));
-    configPath = join(tempDir, 'config.json');
+    configPath = join(tempDir, 'default.json');
     stdoutSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
     stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     vi.clearAllMocks();

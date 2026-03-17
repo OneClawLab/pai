@@ -29,7 +29,7 @@ describe('Model Commands', () => {
 
   beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), 'pai-model-test-'));
-    configPath = join(tempDir, 'config.json');
+    configPath = join(tempDir, 'default.json');
     consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
     consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     processExitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {}) as any);
@@ -441,7 +441,7 @@ describe('Model Commands', () => {
           ),
           async (providers) => {
             const testDir = await mkdtemp(join(tmpdir(), 'pai-pbt-'));
-            const testPath = join(testDir, 'config.json');
+            const testPath = join(testDir, 'default.json');
 
             try {
               const config = {
@@ -480,7 +480,7 @@ describe('Model Commands', () => {
           ),
           async (invalidProvider) => {
             const testDir = await mkdtemp(join(tmpdir(), 'pai-pbt-'));
-            const testPath = join(testDir, 'config.json');
+            const testPath = join(testDir, 'default.json');
 
             try {
               const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {}) as any);
@@ -533,7 +533,7 @@ describe('Model Commands', () => {
           }),
           async (providers) => {
             const testDir = await mkdtemp(join(tmpdir(), 'pai-pbt-'));
-            const testPath = join(testDir, 'config.json');
+            const testPath = join(testDir, 'default.json');
 
             try {
               const config = {

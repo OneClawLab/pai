@@ -23,7 +23,7 @@ PAI 同时提供两类输出：
 4. Provider 默认值
 
 ### 默认路径与运行环境
-- 默认配置文件：`~/config/pai/default.json`
+- 默认配置文件：`~/.config/pai/default.json`
 - 可通过 `--config <path>` 或 `PAI_CONFIG` 覆盖。
 - 在多环境（dev/staging/prod）场景，推荐每个环境独立配置文件并通过 `PAI_CONFIG` 选择。
 

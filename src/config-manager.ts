@@ -11,11 +11,11 @@ export class ConfigurationManager {
   private configPath: string;
 
   constructor(options: CLIOptions = {}) {
-    // Priority: --config > PAI_CONFIG env > ~/config/pai/default.json
+    // Priority: --config > PAI_CONFIG env > ~/.config/pai/default.json
     this.configPath =
       options.config ||
       process.env.PAI_CONFIG ||
-      join(homedir(), 'config', 'pai', 'default.json');
+      join(homedir(), '.config', 'pai', 'default.json');
   }
 
   /**

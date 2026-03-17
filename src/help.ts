@@ -19,7 +19,7 @@ Prerequisites:
     pai model login --name github-copilot
 
 Config:
-  默认配置文件: ~/config/pai/default.json
+  默认配置文件: ~/.config/pai/default.json
   可通过 --config <path> 或 PAI_CONFIG 环境变量覆盖
 
 Exit Codes:

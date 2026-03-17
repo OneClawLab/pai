@@ -11,7 +11,7 @@ describe('CLI Property-Based Tests', () => {
 
   beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), 'pai-cli-test-'));
-    configPath = join(tempDir, 'config.json');
+    configPath = join(tempDir, 'default.json');
   });
 
   afterEach(async () => {

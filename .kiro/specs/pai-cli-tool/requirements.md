@@ -50,7 +50,7 @@ PAI is a Unix-style command-line interface tool for interacting with Large Langu
 
 #### Acceptance Criteria
 
-1. WHEN no configuration override is specified, THE PAI SHALL use ~/config/pai/default.json as the Config_File path
+1. WHEN no configuration override is specified, THE PAI SHALL use ~/.config/pai/default.json as the Config_File path
 2. WHEN the PAI_CONFIG environment variable is set, THE PAI SHALL use that path as the Config_File
 3. WHEN the --config flag is provided, THE PAI SHALL use that path as the Config_File
 4. WHEN multiple configuration sources are present, THE PAI SHALL prioritize in order: --config flag, PAI_CONFIG environment variable, default path
