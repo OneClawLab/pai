@@ -111,7 +111,7 @@ describe('spawnCommand', () => {
 
   it('times out and rejects when timeoutMs exceeded', async () => {
     await expect(
-      spawnCommand('sh', ['-c', 'sleep 10'], undefined, 100)
+      spawnCommand('node', ['-e', 'setInterval(function(){},1000)'], undefined, 100)
     ).rejects.toThrow(/timed out/);
   });
 
