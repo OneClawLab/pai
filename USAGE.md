@@ -1,6 +1,6 @@
-# PAI Usage Guide
+# pai Usage Guide
 
-PAI is a Unix-style command-line tool for interacting with Large Language Models (LLMs).
+pai is a Unix-style command-line tool for interacting with Large Language Models (LLMs).
 
 ## Installation
 
@@ -14,7 +14,7 @@ npm link  # or use: node dist/index.js
 
 ### 1. Configure a Provider
 
-PAI supports many providers via `@mariozechner/pi-ai`. Different providers use different authentication methods.
+pai supports many providers via `@mariozechner/pi-ai`. Different providers use different authentication methods.
 
 ```bash
 # API Key providers (e.g. OpenAI)

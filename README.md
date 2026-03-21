@@ -18,6 +18,14 @@ Thanks to Mario Zechner for providing this amazing work.
 
 ## Install
 
+### From npm
+
+```bash
+npm install -g @theclawlab/pai
+```
+
+### From source
+
 ```bash
 npm install
 npm run build

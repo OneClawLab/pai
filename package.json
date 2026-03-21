@@ -1,10 +1,10 @@
 {
-  "name": "pai-cli",
+  "name": "@theclawlab/pai",
   "type": "module",
-  "version": "1.0.0",
+  "version": "1.0.4",
   "description": "pai is a linux command to interact with LLMs (with only one bash_exec tool and basic session support).",
   "bin": {
-    "pai": "./dist/index.js"
+    "pai": "dist/index.js"
   },
   "scripts": {
     "dev-old": "tsx watch src/index.ts",
@@ -12,11 +12,22 @@
     "build": "tsup",
     "test": "vitest",
     "test:coverage": "vitest run --coverage",
-    "release:local": "npm run build && npm link"
+    "release:local": "npm run build && npm link",
+    "release:public": "npm test && npm run build && npm publish --access public",
+    "release:public:skip-test": "npm run build && npm publish --access public"
   },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "USAGE.md"
+  ],
   "keywords": [],
   "author": "",
-  "license": "ISC",
+  "license": "MIT",
   "devDependencies": {
     "@types/node": "^25.4.0",
     "fast-check": "^4.6.0",
