@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { commandExists, execCommand, spawnCommand } from '../../src/os-utils.js';
+import { commandExists, execCommand, spawnCommand } from '../../src/repo-utils/os.js';
 import * as fc from 'fast-check';
 
 describe('commandExists', () => {
