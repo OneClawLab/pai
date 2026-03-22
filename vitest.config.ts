@@ -7,6 +7,7 @@ export default defineConfig({
     watch: false, // 禁用默认的 Watch 模式
     testTimeout: 10000, // 10 seconds for property-based tests
     fileParallelism: false, // 顺序执行文件，避免并发资源争用
+    include: ['vitest/**/*.test.ts'],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],
