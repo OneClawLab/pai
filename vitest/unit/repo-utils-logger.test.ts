@@ -88,7 +88,7 @@ describe('createFileLogger', () => {
     expect(newContent).not.toContain('old line');
   });
 
-  it('appends to existing log when under maxLines', async () => {
+  it('rotates existing log on startup and writes to fresh file', async () => {
     const logFile = path.join(tmpDir, 'test.log');
     fs.writeFileSync(logFile, 'existing line\n');
 
@@ -96,8 +96,13 @@ describe('createFileLogger', () => {
     logger.info('appended');
     await logger.close();
 
+    // existing content should have been rotated to an archive file
+    const files = fs.readdirSync(tmpDir);
+    expect(files.some(f => f.startsWith('test-') && f.endsWith('.log'))).toBe(true);
+
+    // current log file should only contain the new entry
     const content = fs.readFileSync(logFile, 'utf8');
-    expect(content).toContain('existing line');
+    expect(content).not.toContain('existing line');
     expect(content).toContain('appended');
   });
 });
