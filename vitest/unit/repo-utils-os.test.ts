@@ -38,6 +38,21 @@ describe('execCommand', () => {
     await expect(execCommand('nonexistent-xyz', [])).rejects.toThrow();
   });
 
+  it('times out and rejects with timed out error', async () => {
+    await expect(
+      execCommand('node', ['-e', 'setInterval(function(){},1000)'], 100, 1, 50)
+    ).rejects.toThrow(/timed out/);
+  });
+
+  it('process is terminated after timeout (does not keep running)', async () => {
+    const start = Date.now();
+    await expect(
+      execCommand('node', ['-e', 'setInterval(function(){},1000)'], 150, 1, 50)
+    ).rejects.toThrow(/timed out/);
+    // Should complete well under 1s — if the process kept running we'd wait much longer
+    expect(Date.now() - start).toBeLessThan(1000);
+  });
+
   it('handles multiple arguments', async () => {
     const { stdout } = await execCommand('echo', ['foo', 'bar']);
     expect(stdout).toContain('foo');
