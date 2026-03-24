@@ -26,6 +26,13 @@ export async function handleChatCommand(
     options.quiet,
     options.log
   );
+
+  // AbortController for cancelling in-flight tool calls (e.g. bash_exec process trees)
+  const abortController = new AbortController();
+  const onSignal = (): void => abortController.abort();
+  process.once('SIGTERM', onSignal);
+  process.once('SIGINT', onSignal);
+
   const toolRegistry = new ToolRegistry();
 
   try {
@@ -317,7 +324,8 @@ export async function handleChatCommand(
           try {
             const result = await toolRegistry.execute(
               toolCall.name,
-              toolCall.arguments
+              toolCall.arguments,
+              abortController.signal,
             );
 
             const toolResultMessage: Message = {
@@ -391,7 +399,13 @@ export async function handleChatCommand(
       await sessionManager.appendMessages(newMessages);
     }
 
+    process.off('SIGTERM', onSignal);
+    process.off('SIGINT', onSignal);
+
   } catch (error) {
+    process.off('SIGTERM', onSignal);
+    process.off('SIGINT', onSignal);
+
     if (error instanceof PAIError) {
       await outputFormatter.logError(error);
       outputFormatter.writeError(error);

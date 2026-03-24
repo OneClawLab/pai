@@ -70,7 +70,7 @@ export interface Tool {
   name: string;
   description: string;
   parameters: object; // JSON Schema
-  handler: (args: any) => Promise<any>;
+  handler: (args: any, signal?: AbortSignal) => Promise<any>;
 }
 
 export interface ToolCall {
@@ -170,6 +170,8 @@ export interface ModelConfigOptions extends CLIOptions {
 export interface BashExecArgs {
   command: string;
   cwd?: string;
+  /** Timeout in seconds for this invocation. Default: 600. Max: 3600. */
+  timeout_seconds?: number;
 }
 
 export interface BashExecResult {

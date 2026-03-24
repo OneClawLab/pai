@@ -24,27 +24,27 @@ const modelNameArb = fc.stringMatching(/^[a-z][a-z0-9._-]{0,29}$/);
 const providerConfigArb: fc.Arbitrary<ProviderConfig> = fc.record(
   {
     name: providerNameArb,
-    apiKey: fc.option(fc.string({ minLength: 5, maxLength: 40 }), { nil: undefined }),
-    models: fc.option(fc.array(modelNameArb, { minLength: 0, maxLength: 4 }), { nil: undefined }),
-    defaultModel: fc.option(modelNameArb, { nil: undefined }),
-    baseUrl: fc.option(
-      fc.webUrl({ withFragments: false, withQueryParameters: false }),
-      { nil: undefined }
-    ),
-    temperature: fc.option(fc.double({ min: 0, max: 2, noNaN: true, noDefaultInfinity: true }), { nil: undefined }),
-    maxTokens: fc.option(fc.integer({ min: 1, max: 100000 }), { nil: undefined }),
+    apiKey: fc.string({ minLength: 5, maxLength: 40 }),
+    models: fc.array(modelNameArb, { minLength: 0, maxLength: 4 }),
+    defaultModel: modelNameArb,
+    baseUrl: fc.webUrl({ withFragments: false, withQueryParameters: false }),
+    temperature: fc.double({ min: 0, max: 2, noNaN: true, noDefaultInfinity: true }),
+    maxTokens: fc.integer({ min: 1, max: 100000 }),
   },
   { requiredKeys: ['name'] }
-);
+) as fc.Arbitrary<ProviderConfig>;
 
 /** Generate a full PAIConfig with embed fields always present */
-const paiConfigArb: fc.Arbitrary<PAIConfig> = fc.record({
-  schema_version: fc.constantFrom('1.0.0', '1.1.0', '2.0.0'),
-  defaultProvider: fc.option(providerNameArb, { nil: undefined }),
-  defaultEmbedProvider: providerNameArb,
-  defaultEmbedModel: modelNameArb,
-  providers: fc.array(providerConfigArb, { minLength: 0, maxLength: 5 }),
-});
+const paiConfigArb: fc.Arbitrary<PAIConfig> = fc.record(
+  {
+    schema_version: fc.constantFrom('1.0.0', '1.1.0', '2.0.0'),
+    defaultProvider: providerNameArb,
+    defaultEmbedProvider: providerNameArb,
+    defaultEmbedModel: modelNameArb,
+    providers: fc.array(providerConfigArb, { minLength: 0, maxLength: 5 }),
+  },
+  { requiredKeys: ['schema_version', 'providers'] }
+) as fc.Arbitrary<PAIConfig>;
 
 // --- Helpers ---
 

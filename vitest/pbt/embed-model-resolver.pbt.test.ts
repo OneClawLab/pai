@@ -23,8 +23,8 @@ const providerNameArb = fc.stringMatching(/^[a-z][a-z0-9-]{0,19}$/);
 const modelNameArb = fc.stringMatching(/^[a-z][a-z0-9._-]{0,29}$/);
 
 /** Generate an optional provider/model string (present or undefined) */
-const optionalProviderArb = fc.option(providerNameArb, { nil: undefined });
-const optionalModelArb = fc.option(modelNameArb, { nil: undefined });
+const optionalProviderArb = fc.option(providerNameArb, { nil: undefined }) as fc.Arbitrary<string | undefined>;
+const optionalModelArb = fc.option(modelNameArb, { nil: undefined }) as fc.Arbitrary<string | undefined>;
 
 /** Build a minimal PAIConfig with optional embed/default fields */
 function buildConfig(opts: {
@@ -32,21 +32,22 @@ function buildConfig(opts: {
   defaultEmbedProvider?: string;
   defaultEmbedModel?: string;
 }): PAIConfig {
-  return {
+  const config: PAIConfig = {
     schema_version: '1.0.0',
-    defaultProvider: opts.defaultProvider,
-    defaultEmbedProvider: opts.defaultEmbedProvider,
-    defaultEmbedModel: opts.defaultEmbedModel,
     providers: [],
   };
+  if (opts.defaultProvider !== undefined) config.defaultProvider = opts.defaultProvider;
+  if (opts.defaultEmbedProvider !== undefined) config.defaultEmbedProvider = opts.defaultEmbedProvider;
+  if (opts.defaultEmbedModel !== undefined) config.defaultEmbedModel = opts.defaultEmbedModel;
+  return config;
 }
 
 /** Build EmbedOptions with optional provider/model */
 function buildOptions(opts: { provider?: string; model?: string }): EmbedOptions {
-  return {
-    provider: opts.provider,
-    model: opts.model,
-  };
+  const options: EmbedOptions = {};
+  if (opts.provider !== undefined) options.provider = opts.provider;
+  if (opts.model !== undefined) options.model = opts.model;
+  return options;
 }
 
 // --- Tests ---

@@ -145,6 +145,59 @@ describe('ToolRegistry', () => {
 
       expect(receivedArgs).toEqual({ foo: 'bar', num: 42 });
     });
+
+    it('should forward AbortSignal to tool handler', async () => {
+      const registry = new ToolRegistry();
+      let receivedSignal: AbortSignal | undefined;
+      const mockTool: Tool = {
+        name: 'signal_test',
+        description: 'Signal test',
+        parameters: {},
+        handler: async (_args: any, signal?: AbortSignal) => {
+          receivedSignal = signal;
+          return {};
+        },
+      };
+
+      registry.register(mockTool);
+      const ac = new AbortController();
+      await registry.execute('signal_test', {}, ac.signal);
+
+      expect(receivedSignal).toBe(ac.signal);
+    });
+
+    it('should pass undefined signal when not provided', async () => {
+      const registry = new ToolRegistry();
+      let receivedSignal: AbortSignal | undefined = new AbortController().signal; // non-undefined default
+      const mockTool: Tool = {
+        name: 'no_signal_test',
+        description: 'No signal test',
+        parameters: {},
+        handler: async (_args: any, signal?: AbortSignal) => {
+          receivedSignal = signal;
+          return {};
+        },
+      };
+
+      registry.register(mockTool);
+      await registry.execute('no_signal_test', {});
+
+      expect(receivedSignal).toBeUndefined();
+    });
+
+    it('bash_exec should be abortable via execute signal', async () => {
+      const registry = new ToolRegistry();
+      const ac = new AbortController();
+
+      const resultPromise = registry.execute('bash_exec', { command: 'sleep 60' }, ac.signal);
+      await new Promise((r) => setTimeout(r, 200));
+      ac.abort();
+
+      const result = await resultPromise;
+      expect(result.exitCode).not.toBe(0);
+      expect(result.stderr).toContain('[Aborted:');
+      expect(result.stderr).toContain('session was terminated');
+    }, 10000);
   });
 
   describe('has', () => {

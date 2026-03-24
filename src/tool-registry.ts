@@ -12,55 +12,39 @@ export class ToolRegistry {
     this.registerBuiltinTools();
   }
 
-  /**
-   * Register built-in tools
-   */
   private registerBuiltinTools(): void {
     this.register(createBashExecTool());
   }
 
-  /**
-   * Register a tool
-   */
   register(tool: Tool): void {
     this.tools.set(tool.name, tool);
   }
 
-  /**
-   * Get a tool by name
-   */
   get(name: string): Tool | undefined {
     return this.tools.get(name);
   }
 
-  /**
-   * Get all registered tools
-   */
   getAll(): Tool[] {
     return Array.from(this.tools.values());
   }
 
   /**
-   * Execute a tool by name with arguments
+   * Execute a tool by name.
+   * @param signal - Per-invocation AbortSignal forwarded to the tool handler.
+   *                 Pass the session-level signal so SIGTERM aborts in-flight tool calls.
    */
-  async execute(name: string, args: any): Promise<any> {
+  async execute(name: string, args: any, signal?: AbortSignal): Promise<any> {
     const tool = this.get(name);
     if (!tool) {
       throw new Error(`Tool not found: ${name}`);
     }
-    return await tool.handler(args);
+    return await tool.handler(args, signal);
   }
 
-  /**
-   * Check if a tool exists
-   */
   has(name: string): boolean {
     return this.tools.has(name);
   }
 
-  /**
-   * Get tool count
-   */
   size(): number {
     return this.tools.size;
   }

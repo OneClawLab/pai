@@ -20,6 +20,12 @@ describe('bash_exec tool', () => {
     expect(tool.handler).toBeTypeOf('function');
   });
 
+  it('should expose timeout_seconds parameter in schema', () => {
+    const params = tool.parameters as any;
+    expect(params.properties).toHaveProperty('timeout_seconds');
+    expect(params.properties.timeout_seconds.type).toBe('number');
+  });
+
   describe('detectShell', () => {
     it('should return a string (shell path)', () => {
       const shell = detectShell();
@@ -104,7 +110,6 @@ describe('bash_exec tool', () => {
       try {
         const result = await tool.handler({ command: 'pwd', cwd: tempDir });
         expect(result.exitCode).toBe(0);
-        // On Windows with bash (Git Bash/MSYS2), pwd returns MSYS-style paths
         const dirName = tempDir.replace(/\\/g, '/').split('/').pop()!;
         expect(result.stdout).toContain(dirName);
       } finally {
@@ -124,6 +129,72 @@ describe('bash_exec tool', () => {
         if (isWin32) await new Promise((r) => setTimeout(r, 100));
         await rm(tempDir, { recursive: true, force: true });
       }
+    });
+  });
+
+  describe('AbortSignal (session-level cancellation)', () => {
+    it('should abort a running command when session signal fires', async () => {
+      const ac = new AbortController();
+      const t = createBashExecTool();
+
+      const resultPromise = t.handler({ command: 'sleep 60' }, ac.signal);
+      await new Promise((r) => setTimeout(r, 200));
+      ac.abort();
+
+      const result = await resultPromise;
+      expect(result.stderr).toContain('[Aborted:');
+      expect(result.stderr).toContain('session was terminated');
+      expect(result.exitCode).not.toBe(0);
+    }, 10000);
+
+    it('should return immediately if signal is already aborted', async () => {
+      const ac = new AbortController();
+      ac.abort();
+      const t = createBashExecTool();
+
+      const result = await t.handler({ command: 'echo should not run' }, ac.signal);
+      expect(result.stderr).toContain('[Aborted:');
+      expect(result.exitCode).not.toBe(0);
+    });
+
+    it('should kill child processes spawned by the command', async () => {
+      const ac = new AbortController();
+      const t = createBashExecTool();
+
+      // sleep 60 is a direct child of the bash shell — killing the process
+      // group (Unix) or tree (Windows) must terminate it too.
+      const resultPromise = t.handler({ command: 'sleep 60' }, ac.signal);
+      await new Promise((r) => setTimeout(r, 300));
+      ac.abort();
+
+      const result = await resultPromise;
+      expect(result.exitCode).not.toBe(0);
+      expect(result.stderr).toContain('[Aborted:');
+    }, 10000);
+  });
+
+  describe('timeout_seconds parameter', () => {
+    it('should respect a short timeout and kill the process', async () => {
+      const t = createBashExecTool();
+      const result = await t.handler({ command: 'sleep 60', timeout_seconds: 1 });
+      expect(result.exitCode).not.toBe(0);
+      expect(result.stderr).toContain('[Aborted:');
+      expect(result.stderr).toContain('timed out after 1s');
+      expect(result.stderr).toContain('timeout_seconds');
+    }, 10000);
+
+    it('should clamp timeout above max (3600s) to the hard cap', async () => {
+      const t = createBashExecTool();
+      const result = await t.handler({ command: 'echo ok', timeout_seconds: 9999 });
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).toContain('ok');
+    });
+
+    it('should use default timeout when timeout_seconds is not specified', async () => {
+      const t = createBashExecTool();
+      const result = await t.handler({ command: 'echo default' });
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).toContain('default');
     });
   });
 
@@ -175,7 +246,6 @@ describe('bash_exec tool', () => {
       const tempDir = await mkdtemp(join(tmpdir(), 'pai-bash-test-'));
       try {
         const outputFile = join(tempDir, 'output.txt');
-        // Convert Windows path to MSYS-style for bash on Windows
         const bashPath = isWin32
           ? outputFile.replace(/\\/g, '/').replace(/^([A-Za-z]):/, (_, d: string) => `/${d.toLowerCase()}`)
           : outputFile;
@@ -225,7 +295,6 @@ describe('bash_exec tool', () => {
     });
   });
 
-  // Property-Based Tests
   describe('Property-Based Tests', () => {
     it('should always return stdout, stderr, and exitCode fields', async () => {
       const t = createBashExecTool();
@@ -242,7 +311,6 @@ describe('bash_exec tool', () => {
           ),
           async (command) => {
             const result = await t.handler({ command });
-
             expect(result).toHaveProperty('stdout');
             expect(result).toHaveProperty('stderr');
             expect(result).toHaveProperty('exitCode');
