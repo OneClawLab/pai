@@ -1,4 +1,5 @@
 import { appendFile, writeFile } from 'node:fs/promises';
+import { writeSync } from 'node:fs';
 import { existsSync } from 'node:fs';
 import type { OutputEvent, ExitCode } from './types.js';
 import { PAIError } from './types.js';
@@ -92,7 +93,9 @@ export class OutputFormatter {
       ...event,
       timestamp: event.timestamp || Date.now(),
     });
-    process.stderr.write(line + '\n');
+    // Use writeSync to bypass Node.js stream buffering on piped stderr,
+    // ensuring each event is flushed immediately to the parent process.
+    writeSync(2, line + '\n');
   }
 
   /**

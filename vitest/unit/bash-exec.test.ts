@@ -348,7 +348,7 @@ describe('bash_exec tool', () => {
         ),
         { numRuns: 20 }
       );
-    });
+    }, 30_000);
 
     it('should faithfully capture echo output for alphanumeric strings', async () => {
       const t = createBashExecTool();

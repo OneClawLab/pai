@@ -28,9 +28,9 @@ const optionalModelArb = fc.option(modelNameArb, { nil: undefined }) as fc.Arbit
 
 /** Build a minimal PAIConfig with optional embed/default fields */
 function buildConfig(opts: {
-  defaultProvider?: string;
-  defaultEmbedProvider?: string;
-  defaultEmbedModel?: string;
+  defaultProvider?: string | undefined;
+  defaultEmbedProvider?: string | undefined;
+  defaultEmbedModel?: string | undefined;
 }): PAIConfig {
   const config: PAIConfig = {
     schema_version: '1.0.0',
@@ -43,7 +43,7 @@ function buildConfig(opts: {
 }
 
 /** Build EmbedOptions with optional provider/model */
-function buildOptions(opts: { provider?: string; model?: string }): EmbedOptions {
+function buildOptions(opts: { provider?: string | undefined; model?: string | undefined }): EmbedOptions {
   const options: EmbedOptions = {};
   if (opts.provider !== undefined) options.provider = opts.provider;
   if (opts.model !== undefined) options.model = opts.model;

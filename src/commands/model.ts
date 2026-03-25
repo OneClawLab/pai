@@ -4,6 +4,7 @@ import { createInterface } from 'node:readline';
 import type { ModelConfigOptions } from '../types.js';
 import { PAIError } from '../types.js';
 import { ConfigurationManager } from '../config-manager.js';
+import { resolveModel, getRegistryModels, validateModelId } from '../model-resolver.js';
 
 /**
  * Handle model list command
@@ -73,6 +74,7 @@ export async function handleModelList(options: ModelConfigOptions): Promise<void
 
       if (options.json) {
         const output = {
+          defaultProvider: config.defaultProvider ?? null,
           defaultEmbedProvider: config.defaultEmbedProvider ?? null,
           defaultEmbedModel: config.defaultEmbedModel ?? null,
           providers: config.providers.map((p) => ({
@@ -80,7 +82,10 @@ export async function handleModelList(options: ModelConfigOptions): Promise<void
             provider: p.name,
             configured: true,
             models: p.models || [],
-            defaultModel: p.defaultModel,
+            defaultModel: p.defaultModel ?? null,
+            contextWindow: p.contextWindow ?? null,
+            maxTokens: p.maxTokens ?? null,
+            temperature: p.temperature ?? null,
           })),
         };
 
@@ -395,6 +400,74 @@ export async function handleModelDefault(options: ModelConfigOptions): Promise<v
     } else {
       console.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
       process.exit(2);
+    }
+  }
+}
+
+/**
+ * Handle model resolve command — show the effective provider/model that would be used
+ */
+export async function handleModelResolve(options: ModelConfigOptions & { model?: string }): Promise<void> {
+  const configManager = new ConfigurationManager(options);
+
+  try {
+    process.stderr.write(`Config: ${configManager.getConfigPath()}\n`);
+
+    const config = await configManager.loadConfig();
+    const provider = await configManager.getProvider(options.name);
+    const resolved = resolveModel(provider, {
+      ...(options.model !== undefined && { model: options.model }),
+    });
+
+    if (!resolved.model) {
+      throw new PAIError(
+        'No model could be resolved',
+        1,
+        { provider: provider.name, message: 'Configure a defaultModel or specify --model' }
+      );
+    }
+
+    // Validate model if possible (warn only)
+    const warning = validateModelId(resolved.model, provider);
+    if (warning) {
+      process.stderr.write(`Warning: ${warning}\n`);
+    }
+
+    const registryModels = getRegistryModels(provider.name);
+
+    const output = {
+      provider: resolved.provider,
+      model: resolved.model,
+      modelSource: resolved.modelSource,
+      contextWindow: resolved.contextWindow ?? null,
+      maxTokens: resolved.maxTokens ?? null,
+      temperature: resolved.temperature ?? null,
+      configured: {
+        defaultProvider: config.defaultProvider ?? null,
+        providerDefaultModel: provider.defaultModel ?? null,
+        providerModels: provider.models ?? [],
+        embed: {
+          provider: config.defaultEmbedProvider ?? null,
+          model: config.defaultEmbedModel ?? null,
+        },
+      },
+      availableModels: {
+        source: registryModels.length > 0 ? 'pi-ai' : 'none',
+        models: registryModels,
+      },
+    };
+
+    console.log(JSON.stringify(output, null, 2));
+  } catch (error) {
+    if (error instanceof PAIError) {
+      console.error(`Error: ${error.message}`);
+      if (error.context) {
+        console.error(`Context: ${JSON.stringify(error.context)}`);
+      }
+      process.exit(error.exitCode);
+    } else {
+      console.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
+      process.exit(1);
     }
   }
 }

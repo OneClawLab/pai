@@ -4,7 +4,7 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { handleChatCommand } from './commands/chat.js';
 import { handleEmbedCommand } from './commands/embed.js';
-import { handleModelList, handleModelConfig, handleModelDefault, handleModelLogin } from './commands/model.js';
+import { handleModelList, handleModelConfig, handleModelDefault, handleModelLogin, handleModelResolve } from './commands/model.js';
 import { installHelp, addSubcommandExamples } from './help.js';
 import type { ChatOptions, EmbedOptions, ModelConfigOptions } from './types.js';
 
@@ -149,13 +149,24 @@ modelCommand
   .description('View or set the default provider')
   .option('--config <path>', 'Config file path')
   .option('--name <name>', 'Provider name to set as default')
-  .option('--embed-provider <name>', 'Set default embed provider')
+  .option('--embed-provider <name>', 'Set default embed embed provider')
   .option('--embed-model <model>', 'Set default embed model')
   .option('--json', 'Output as JSON')
   .action(async (options: ModelConfigOptions) => {
     await handleModelDefault(options);
   });
 addSubcommandExamples(modelCommand.commands.find(c => c.name() === 'default')!, 'default');
+
+// Model resolve command
+modelCommand
+  .command('resolve')
+  .description('Show the effective provider/model that would be used (machine-friendly JSON)')
+  .option('--config <path>', 'Config file path')
+  .option('--provider <name>', 'Provider name (uses default if omitted)')
+  .option('--model <name>', 'Model override')
+  .action(async (options: ModelConfigOptions & { model?: string }) => {
+    await handleModelResolve(options);
+  });
 
 // Error handling for unknown commands
 program.on('command:*', () => {

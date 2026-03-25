@@ -6,7 +6,7 @@ import { InputResolver } from '../input-resolver.js';
 import { OutputFormatter } from '../output-formatter.js';
 import { LLMClient } from '../llm-client.js';
 import { ToolRegistry } from '../tool-registry.js';
-import { getModels } from '@mariozechner/pi-ai';
+import { resolveModel } from '../model-resolver.js';
 
 const DEFAULT_MAX_TURNS = 100; // Prevent infinite loops
 
@@ -73,19 +73,12 @@ export async function handleChatCommand(
 
     // Load configuration and resolve credentials
     const provider = await configManager.getProvider(options.provider);
-    let modelName = options.model || provider.defaultModel || provider.models?.[0];
-
-    // Fall back to pi-ai's known models for this provider
-    if (!modelName) {
-      try {
-        const knownModels = getModels(provider.name as any);
-        if (knownModels.length > 0) {
-          modelName = knownModels[0]!.id;
-        }
-      } catch {
-        // Provider not recognized by pi-ai, ignore
-      }
-    }
+    const resolved = resolveModel(provider, {
+      ...(options.model !== undefined && { model: options.model }),
+      ...(options.temperature !== undefined && { temperature: options.temperature }),
+      ...(options.maxTokens !== undefined && { maxTokens: options.maxTokens }),
+    });
+    const modelName = resolved.model;
 
     if (!modelName) {
       throw new PAIError(
@@ -103,8 +96,8 @@ export async function handleChatCommand(
         provider: provider.name,
         model: modelName,
         configFile: configManager.getConfigPath(),
-        temperature: options.temperature ?? provider.temperature,
-        maxTokens: options.maxTokens ?? provider.maxTokens,
+        temperature: resolved.temperature,
+        maxTokens: resolved.maxTokens,
         stream: options.stream ?? false,
         credentialSource: 'resolved',
       };
@@ -117,8 +110,8 @@ export async function handleChatCommand(
       provider: provider.name,
       model: modelName,
       apiKey,
-      temperature: options.temperature ?? provider.temperature,
-      maxTokens: options.maxTokens ?? provider.maxTokens,
+      temperature: resolved.temperature,
+      maxTokens: resolved.maxTokens,
       stream: options.stream,
       api: provider.api,
       baseUrl: provider.baseUrl,
@@ -187,8 +180,8 @@ export async function handleChatCommand(
     await outputFormatter.logRequestSummary({
       provider: provider.name,
       model: modelName,
-      temperature: options.temperature ?? provider.temperature,
-      maxTokens: options.maxTokens ?? provider.maxTokens,
+      temperature: resolved.temperature,
+      maxTokens: resolved.maxTokens,
       stream: options.stream,
     });
 

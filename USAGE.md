@@ -579,7 +579,7 @@ List providers and models.
 
 **Options:**
 - `--all` - Show all supported providers
-- `--json` - Output as JSON
+- `--json` - Output as JSON (includes `contextWindow`, `maxTokens`, `temperature`, `defaultModel` per provider)
 
 ### `pai model config`
 
@@ -640,9 +640,56 @@ pai model default --json
 - `--json` - Output as JSON
 - `--config <path>` - Config file path
 
-### `pai model login`
+### `pai model resolve`
 
-Interactive OAuth login for providers that require browser-based authentication.
+Show the effective provider/model that would be used, with all resolved runtime settings. Always outputs JSON. Useful for downstream tools (e.g. `agent`) to get deterministic startup configuration.
+
+```bash
+# Resolve using default provider
+pai model resolve
+
+# Resolve a specific provider
+pai model resolve --provider openai
+
+# Override model
+pai model resolve --provider openai --model gpt-4o
+```
+
+**Output:**
+
+```json
+{
+  "provider": "openai",
+  "model": "gpt-4o-mini",
+  "modelSource": "providerDefault",
+  "contextWindow": 128000,
+  "maxTokens": 16384,
+  "temperature": 0.7,
+  "configured": {
+    "defaultProvider": "openai",
+    "providerDefaultModel": "gpt-4o-mini",
+    "providerModels": ["gpt-4o-mini", "gpt-4o"],
+    "embed": { "provider": "openai", "model": "text-embedding-3-small" }
+  },
+  "availableModels": {
+    "source": "pi-ai",
+    "models": ["gpt-4o-mini", "gpt-4o", "o1-mini", "..."]
+  }
+}
+```
+
+`modelSource` indicates how the model was resolved:
+- `cli` — from `--model` flag
+- `providerDefault` — from provider config `defaultModel`
+- `providerModels` — from provider config `models[0]`
+- `registry` — from pi-ai registry fallback
+
+**Options:**
+- `--provider <name>` - Provider name (uses default if omitted)
+- `--model <name>` - Model override
+- `--config <path>` - Config file path
+
+
 
 **Options:**
 - `--name <name>` - Provider name (required)
