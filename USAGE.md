@@ -1,16 +1,36 @@
 # pai Usage Guide
 
-pai is a Unix-style command-line tool for interacting with Large Language Models (LLMs).
+pai is a Unix-style command-line tool for interacting with Large Language Models (LLMs), and also a TypeScript library for programmatic access.
 
-## Installation
+## Table of Contents
+
+- [CLI Installation](#cli-installation)
+- [Library Installation](#library-installation)
+- [CLI Quick Start](#cli-quick-start)
+- [Library Quick Start](#library-quick-start)
+- [Provider Configuration](#provider-configuration)
+- [CLI Commands](#cli-commands)
+- [Library API](#library-api)
+
+---
+
+## CLI Installation
 
 ```bash
 npm install
 npm run build
-npm link  # or use: node dist/index.js
+npm link  # or use: node dist/cli.js
 ```
 
-## Quick Start
+## Library Installation
+
+```bash
+npm install @theclawlab/pai
+```
+
+---
+
+## CLI Quick Start
 
 ### 1. Configure a Provider
 
@@ -59,6 +79,140 @@ echo "Explain quantum computing" | pai chat --provider openai --model gpt-4o-min
 # With streaming output
 pai chat "Write a story" --stream --provider openai --model gpt-4o
 ```
+
+---
+
+## Library Quick Start
+
+### Basic Chat
+
+```typescript
+import { chat, loadConfig, resolveProvider } from '@theclawlab/pai';
+
+// Load configuration
+const config = await loadConfig();
+const { provider, apiKey } = await resolveProvider(config, 'openai');
+
+// Build chat config
+const chatConfig = {
+  provider: provider.name,
+  model: 'gpt-4o-mini',
+  apiKey,
+};
+
+// Chat with streaming events
+for await (const event of chat(
+  { userMessage: 'Hello!' },
+  chatConfig,
+  process.stdout,  // streaming chunks written here
+  [],              // tools (empty for no tools)
+  new AbortController().signal,
+)) {
+  switch (event.type) {
+    case 'start':
+      console.error(`Starting chat with ${event.model}`);
+      break;
+    case 'complete':
+      console.error(`Finished: ${event.finishReason}`);
+      break;
+    case 'chat_end':
+      console.error(`Generated ${event.newMessages.length} new messages`);
+      break;
+  }
+}
+```
+
+### Chat with System Prompt and History
+
+```typescript
+import { chat, loadConfig, resolveProvider } from '@theclawlab/pai';
+
+const config = await loadConfig();
+const { provider, apiKey } = await resolveProvider(config);
+
+const chatConfig = {
+  provider: provider.name,
+  model: provider.defaultModel || 'gpt-4o-mini',
+  apiKey,
+};
+
+// Chat with system prompt and history
+for await (const event of chat(
+  {
+    system: 'You are a helpful assistant.',
+    history: [
+      { role: 'user', content: 'My name is Alice' },
+      { role: 'assistant', content: 'Nice to meet you, Alice!' },
+    ],
+    userMessage: "What's my name?",
+  },
+  chatConfig,
+  null,  // no streaming chunks
+  [],
+  new AbortController().signal,
+)) {
+  if (event.type === 'chat_end') {
+    // event.newMessages contains the assistant's response
+    const assistantMsg = event.newMessages.find(m => m.role === 'assistant');
+    console.log('Assistant:', assistantMsg?.content);
+  }
+}
+```
+
+### Chat with Tools
+
+```typescript
+import { chat, createBashExecTool, loadConfig, resolveProvider } from '@theclawlab/pai';
+
+const config = await loadConfig();
+const { provider, apiKey } = await resolveProvider(config);
+
+const chatConfig = {
+  provider: provider.name,
+  model: provider.defaultModel || 'gpt-4o',
+  apiKey,
+};
+
+// Use bash_exec tool
+const tools = [createBashExecTool()];
+
+for await (const event of chat(
+  { userMessage: 'What files are in the current directory?' },
+  chatConfig,
+  process.stdout,
+  tools,
+  new AbortController().signal,
+)) {
+  switch (event.type) {
+    case 'tool_call':
+      console.error(`Tool: ${event.name}(${JSON.stringify(event.args)})`);
+      break;
+    case 'tool_result':
+      console.error(`Result: ${JSON.stringify(event.result)}`);
+      break;
+  }
+}
+```
+
+### Error Handling
+
+```typescript
+import { chat, loadConfig, resolveProvider } from '@theclawlab/pai';
+import { PAIError } from '@theclawlab/pai';
+
+try {
+  const config = await loadConfig();
+  const { provider, apiKey } = await resolveProvider(config, 'nonexistent');
+} catch (err) {
+  if (err instanceof PAIError) {
+    console.error(`Error (exit code ${err.exitCode}): ${err.message}`);
+  } else {
+    console.error('Unexpected error:', err);
+  }
+}
+```
+
+---
 
 ## Provider Configuration
 

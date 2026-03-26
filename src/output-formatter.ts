@@ -216,6 +216,17 @@ export class OutputFormatter {
   }
 
   /**
+   * Log assistant message
+   */
+  async logAssistantMessage(content: string): Promise<void> {
+    if (this.logFile) {
+      await this.appendToLog('assistant', content).catch(() => {
+        // Silently fail
+      });
+    }
+  }
+
+  /**
    * Log error
    */
   async logError(error: Error | PAIError): Promise<void> {

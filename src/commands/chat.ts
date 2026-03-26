@@ -1,14 +1,14 @@
-import type { ChatOptions, Message, LLMResponse } from '../types.js';
+import type { ChatOptions, Message } from '../types.js';
 import { PAIError } from '../types.js';
-import { ConfigurationManager } from '../config-manager.js';
+import { PAIError as LibPAIError } from '../lib/types.js';
+import { loadConfig, resolveProvider } from '../lib/config.js';
+import { chat } from '../lib/chat.js';
+import type { ChatInput, ChatConfig } from '../lib/types.js';
 import { SessionManager } from '../session-manager.js';
 import { InputResolver } from '../input-resolver.js';
 import { OutputFormatter } from '../output-formatter.js';
-import { LLMClient } from '../llm-client.js';
 import { ToolRegistry } from '../tool-registry.js';
-import { resolveModel } from '../model-resolver.js';
-
-const DEFAULT_MAX_TURNS = 100; // Prevent infinite loops
+import { resolveModel } from '../lib/model-resolver.js';
 
 /**
  * Handle the chat command
@@ -17,8 +17,7 @@ export async function handleChatCommand(
   prompt: string | undefined,
   options: ChatOptions
 ): Promise<void> {
-  // Initialize components
-  const configManager = new ConfigurationManager(options);
+  // Initialize CLI components
   const sessionManager = new SessionManager(options.session);
   const inputResolver = new InputResolver();
   const outputFormatter = new OutputFormatter(
@@ -71,8 +70,11 @@ export async function handleChatCommand(
       }
     }
 
-    // Load configuration and resolve credentials
-    const provider = await configManager.getProvider(options.provider);
+    // Load configuration and resolve provider using lib/ layer
+    const config = await loadConfig(options.config);
+    const { provider, apiKey } = await resolveProvider(config, options.provider);
+
+    // Resolve model from provider config + CLI options
     const resolved = resolveModel(provider, {
       ...(options.model !== undefined && { model: options.model }),
       ...(options.temperature !== undefined && { temperature: options.temperature }),
@@ -88,14 +90,16 @@ export async function handleChatCommand(
       );
     }
 
-    const apiKey = await configManager.resolveCredentials(provider.name, undefined);
-
     // --dry-run: show resolved config and exit
     if (options.dryRun) {
+      const configPath =
+        options.config ||
+        process.env['PAI_CONFIG'] ||
+        `~/.config/pai/default.json`;
       const info = {
         provider: provider.name,
         model: modelName,
-        configFile: configManager.getConfigPath(),
+        configFile: configPath,
         temperature: resolved.temperature,
         maxTokens: resolved.maxTokens,
         stream: options.stream ?? false,
@@ -105,28 +109,9 @@ export async function handleChatCommand(
       return;
     }
 
-    // Initialize LLM client
-    const llmClient = new LLMClient({
-      provider: provider.name,
-      model: modelName,
-      apiKey,
-      temperature: resolved.temperature,
-      maxTokens: resolved.maxTokens,
-      stream: options.stream,
-      api: provider.api,
-      baseUrl: provider.baseUrl,
-      reasoning: provider.reasoning,
-      input: provider.input,
-      contextWindow: provider.contextWindow,
-      providerOptions: provider.providerOptions,
-    });
-
     // Load session history
-    const messages: Message[] = await sessionManager.loadMessages();
-    const loadedMessageCount = messages.length;
-
-    // Track new messages to append to session file
-    const newMessages: Message[] = [];
+    const sessionMessages: Message[] = await sessionManager.loadMessages();
+    const loadedMessageCount = sessionMessages.length;
 
     // Resolve system instruction
     const systemInstruction = await inputResolver.resolveSystemInput(
@@ -134,22 +119,21 @@ export async function handleChatCommand(
       options.systemFile
     );
 
-    // Add or update system message
+    // Build history: session messages minus any leading system message
+    // (system is passed separately to ChatInput)
+    let history: Message[] = [...sessionMessages];
+    let hadSystemInSession = false;
+
     if (systemInstruction) {
-      if (messages.length > 0 && messages[0]?.role === 'system') {
-        // Replace existing system message (already in session file, no need to append)
-        messages[0] = { role: 'system', content: systemInstruction };
-      } else {
-        // Add new system message at the beginning
-        const sysMsg: Message = { role: 'system', content: systemInstruction };
-        messages.unshift(sysMsg);
-        newMessages.push(sysMsg);
+      if (history.length > 0 && history[0]?.role === 'system') {
+        // Replace existing system message in history
+        history[0] = { role: 'system', content: systemInstruction };
+        hadSystemInSession = true;
       }
       await outputFormatter.logSystemMessage(systemInstruction);
     }
 
     // Resolve user input
-    // Only use stdin if: not a TTY AND no other input source provided
     const hasExplicitInput = prompt !== undefined || options.inputFile !== undefined;
     const stdinAvailable = !process.stdin.isTTY && !hasExplicitInput;
     const userInput = await inputResolver.resolveUserInput({
@@ -159,24 +143,17 @@ export async function handleChatCommand(
       images: options.image,
     });
 
-    // Add or update user message
-    const userMessage: Message = { role: 'user', content: userInput };
-    
     // If the last loaded message was a user message, replace it (already in session file)
-    // Otherwise add as new message
-    const lastLoadedIsUser = loadedMessageCount > 0 && messages[messages.length - 1]?.role === 'user';
+    const lastLoadedIsUser =
+      loadedMessageCount > 0 && sessionMessages[sessionMessages.length - 1]?.role === 'user';
     if (lastLoadedIsUser) {
-      messages[messages.length - 1] = userMessage;
-    } else {
-      messages.push(userMessage);
-      newMessages.push(userMessage);
+      history[history.length - 1] = { role: 'user', content: userInput };
     }
 
     await outputFormatter.logUserMessage(
       typeof userInput === 'string' ? userInput : JSON.stringify(userInput)
     );
 
-    // Log request summary
     await outputFormatter.logRequestSummary({
       provider: provider.name,
       model: modelName,
@@ -185,211 +162,154 @@ export async function handleChatCommand(
       stream: options.stream,
     });
 
+    // Build ChatInput
+    // history passed to lib/chat should NOT include the current user message
+    // (lib/chat appends userMessage itself)
+    // We need to separate: history = everything except the current user turn
+    let chatHistory: Message[];
+    if (lastLoadedIsUser) {
+      // The last message in history was replaced with current user input above,
+      // but lib/chat will add userMessage itself — so exclude it from history
+      chatHistory = history.slice(0, -1);
+    } else {
+      chatHistory = history;
+    }
+
+    // Extract system from history if present (lib/chat takes system separately)
+    let chatSystem: string | undefined;
+    if (systemInstruction) {
+      chatSystem = systemInstruction;
+      // Remove system message from chatHistory if it's there
+      if (chatHistory.length > 0 && chatHistory[0]?.role === 'system') {
+        chatHistory = chatHistory.slice(1);
+      }
+    } else if (chatHistory.length > 0 && chatHistory[0]?.role === 'system') {
+      // Use existing system message from session
+      const sysContent = chatHistory[0].content;
+      chatSystem = typeof sysContent === 'string' ? sysContent : JSON.stringify(sysContent);
+      chatHistory = chatHistory.slice(1);
+    }
+
+    const chatInput: ChatInput = {
+      ...(chatSystem !== undefined && { system: chatSystem }),
+      userMessage: userInput,
+      ...(chatHistory.length > 0 && { history: chatHistory }),
+    };
+
+    // Build ChatConfig from provider config + CLI options
+    // Use spread to avoid setting undefined on exactOptionalPropertyTypes
+    const chatConfig: ChatConfig = {
+      provider: provider.name,
+      model: modelName,
+      apiKey,
+      ...(options.stream !== undefined && { stream: options.stream }),
+      ...(resolved.temperature !== undefined && { temperature: resolved.temperature }),
+      ...(resolved.maxTokens !== undefined && { maxTokens: resolved.maxTokens }),
+      ...(provider.api !== undefined && { api: provider.api }),
+      ...(provider.baseUrl !== undefined && { baseUrl: provider.baseUrl }),
+      ...(provider.reasoning !== undefined && { reasoning: provider.reasoning }),
+      ...(resolved.contextWindow !== undefined && { contextWindow: resolved.contextWindow }),
+      ...(provider.providerOptions !== undefined && { providerOptions: provider.providerOptions }),
+    };
+
     // Get all tools
     const tools = toolRegistry.getAll();
 
-    // Execute chat with tool calling loop
-    let continueLoop = true;
-    let maxTurns = options.maxTurns ?? DEFAULT_MAX_TURNS;
-    const turnsLimit = maxTurns; // remember original for messages
-    let finalRoundAttempted = false;
+    // Compute content lengths for diagnostics (for writeProgress start event)
+    const systemChars = chatSystem ? chatSystem.length : 0;
+    const userChars =
+      typeof userInput === 'string'
+        ? userInput.length
+        : JSON.stringify(userInput).length;
 
-    // Compute content lengths for diagnostics
-    const systemMsg = messages.find(m => m.role === 'system');
-    const userMsg = [...messages].reverse().find(m => m.role === 'user');
-    const systemChars = systemMsg ? String(systemMsg.content).length : 0;
-    const userChars = userMsg ? (typeof userMsg.content === 'string' ? userMsg.content.length : JSON.stringify(userMsg.content).length) : 0;
+    // Call lib/chat and consume ChatEvent stream
+    for await (const event of chat(
+      chatInput,
+      chatConfig,
+      process.stdout,
+      tools,
+      abortController.signal,
+      options.maxTurns,
+    )) {
+      switch (event.type) {
+        case 'start':
+          outputFormatter.writeProgress({
+            type: 'start',
+            data: {
+              provider: event.provider,
+              model: event.model,
+              stream: options.stream ?? false,
+              messages: event.messageCount,
+              systemChars,
+              userChars,
+              tools: event.toolCount,
+            },
+          });
+          break;
 
-    while (continueLoop && maxTurns > 0) {
-      maxTurns--;
+        case 'complete':
+          outputFormatter.writeProgress({
+            type: 'complete',
+            data: {
+              finishReason: event.finishReason,
+              usage: event.usage,
+            },
+          });
+          break;
 
-      // On the last allowed turn, withhold tools so the model is
-      // forced to reply with text instead of requesting more tool calls.
-      const isLastTurn = maxTurns === 0;
-      const currentTools = isLastTurn ? [] : tools;
-
-      if (isLastTurn) {
-        process.stderr.write(
-          `[Info] Approaching tool-call turn limit. Requesting final text response from model.\n`
-        );
-      }
-
-      outputFormatter.writeProgress({ type: 'start', data: {
-        provider: provider.name,
-        model: modelName,
-        stream: options.stream ?? false,
-        messages: messages.length,
-        systemChars,
-        userChars,
-        tools: currentTools.length,
-      } });
-
-      let assistantMessage: Message;
-      let lastResponse: LLMResponse | undefined;
-
-      if (options.stream) {
-        // Streaming mode
-        let fullContent = '';
-        const toolCalls: any[] = [];
-
-        for await (const response of llmClient.chat(messages, currentTools)) {
-          if (response.content && response.finishReason === 'streaming') {
-            fullContent += response.content;
-            outputFormatter.writeModelOutput(response.content);
-          }
-
-          if (response.finishReason !== 'streaming') {
-            // Final response
-            lastResponse = response;
-            if (response.toolCalls) {
-              toolCalls.push(...response.toolCalls);
-            }
-          }
-        }
-
-        assistantMessage = {
-          role: 'assistant',
-          content: fullContent,
-        };
-
-        // Add tool calls to message if any
-        if (toolCalls.length > 0) {
-          (assistantMessage as any).tool_calls = toolCalls;
-        }
-      } else {
-        // Non-streaming mode
-        const response = await llmClient.chatComplete(messages, currentTools);
-        lastResponse = response;
-        
-        outputFormatter.writeModelOutput(response.content);
-
-        assistantMessage = {
-          role: 'assistant',
-          content: response.content,
-        };
-
-        if (response.toolCalls) {
-          (assistantMessage as any).tool_calls = response.toolCalls;
-        }
-      }
-
-      messages.push(assistantMessage);
-      newMessages.push(assistantMessage);
-
-      outputFormatter.writeProgress({ type: 'complete', data: {
-        finishReason: lastResponse?.finishReason ?? 'unknown',
-        usage: lastResponse?.usage,
-      } });
-
-      // Handle tool calls
-      const toolCalls = (assistantMessage as any).tool_calls;
-      
-      if (toolCalls && toolCalls.length > 0) {
-        for (const toolCall of toolCalls) {
+        case 'tool_call':
           outputFormatter.writeProgress({
             type: 'tool_call',
-            data: { name: toolCall.name, arguments: toolCall.arguments },
+            data: { name: event.name, arguments: event.args },
           });
+          await outputFormatter.logToolCall(event.name, event.args);
+          break;
 
-          await outputFormatter.logToolCall(toolCall.name, toolCall.arguments);
+        case 'tool_result':
+          outputFormatter.writeProgress({
+            type: 'tool_result',
+            data: event.result,
+          });
+          await outputFormatter.logToolResult(event.name, event.result);
+          break;
 
-          // If we've exhausted turns, reject remaining tool calls
-          // and let the loop exit naturally on the next condition check.
-          if (maxTurns <= 0) {
-            const rejectContent = `Error: Tool-call turn limit (${turnsLimit}) reached. Please provide a final text summary without further tool calls.`;
-            const rejectMessage: Message = {
-              role: 'tool',
-              name: toolCall.name,
-              tool_call_id: toolCall.id,
-              content: rejectContent,
-            };
-            messages.push(rejectMessage);
-            newMessages.push(rejectMessage);
+        case 'chat_end': {
+          // Determine which new messages to append to session
+          // We need to include: system (if new), user message, and all assistant/tool messages
+          const newMessages: Message[] = [];
 
-            outputFormatter.writeProgress({
-              type: 'tool_result',
-              data: { error: rejectContent },
-            });
-            await outputFormatter.logToolResult(toolCall.name, { error: rejectContent });
-            continue;
+          if (systemInstruction && !hadSystemInSession) {
+            newMessages.push({ role: 'system', content: systemInstruction });
           }
 
-          try {
-            const result = await toolRegistry.execute(
-              toolCall.name,
-              toolCall.arguments,
-              abortController.signal,
-            );
-
-            const toolResultMessage: Message = {
-              role: 'tool',
-              name: toolCall.name,
-              tool_call_id: toolCall.id,
-              content: JSON.stringify(result),
-            };
-
-            messages.push(toolResultMessage);
-            newMessages.push(toolResultMessage);
-
-            outputFormatter.writeProgress({
-              type: 'tool_result',
-              data: result,
-            });
-
-            await outputFormatter.logToolResult(toolCall.name, result);
-          } catch (error) {
-            const errorMessage: Message = {
-              role: 'tool',
-              name: toolCall.name,
-              tool_call_id: toolCall.id,
-              content: `Error: ${error instanceof Error ? error.message : String(error)}`,
-            };
-
-            messages.push(errorMessage);
-            newMessages.push(errorMessage);
-
-            outputFormatter.writeProgress({
-              type: 'tool_result',
-              data: { error: String(error) },
-            });
-
-            await outputFormatter.logToolResult(toolCall.name, { error: String(error) });
+          if (!lastLoadedIsUser) {
+            newMessages.push({ role: 'user', content: userInput });
           }
+
+          // Add all messages from chat_end (assistant + tool messages)
+          newMessages.push(...(event.newMessages as Message[]));
+
+          // Log assistant message(s) to log file
+          for (const msg of event.newMessages) {
+            if (msg.role === 'assistant') {
+              const assistantContent = typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content);
+              await outputFormatter.logAssistantMessage(assistantContent);
+            }
+          }
+
+          // Save session if not disabled
+          if (options.append !== false && sessionManager.getSessionPath()) {
+            await sessionManager.appendMessages(newMessages);
+          }
+          break;
         }
 
-        // If tool calls were rejected due to turn limit, do one
-        // final round without tools so the model produces a text reply.
-        if (maxTurns <= 0) {
-          if (finalRoundAttempted) {
-            // Already tried a final round — model keeps returning tool calls.
-            // Force exit to prevent infinite loop.
-            process.stderr.write(
-              `[Warning] Model continues to request tool calls after final round. Stopping.\n`
-            );
-            continueLoop = false;
-          } else {
-            finalRoundAttempted = true;
-            process.stderr.write(
-              `[Warning] Tool-call turn limit (${turnsLimit}) reached. Making one final request for a text summary.\n`
-            );
-            // Allow one more turn, but tools are already withheld
-            // because isLastTurn will be true (maxTurns is 0).
-            maxTurns = 1;
-          }
-        }
-
-        // Continue loop to get model's response after tool execution
-        continueLoop = true;
-      } else {
-        // No tool calls, we're done
-        continueLoop = false;
+        // thinking events - no CLI output needed
+        case 'thinking_start':
+        case 'thinking_delta':
+        case 'thinking_end':
+          break;
       }
-    }
-
-    // Save session if not disabled — only append new messages from this invocation
-    // Commander.js parses --no-append as options.append = false
-    if (options.append !== false && sessionManager.getSessionPath()) {
-      await sessionManager.appendMessages(newMessages);
     }
 
     process.off('SIGTERM', onSignal);
@@ -399,7 +319,7 @@ export async function handleChatCommand(
     process.off('SIGTERM', onSignal);
     process.off('SIGINT', onSignal);
 
-    if (error instanceof PAIError) {
+    if (error instanceof PAIError || error instanceof LibPAIError) {
       await outputFormatter.logError(error);
       outputFormatter.writeError(error);
       process.exit(error.exitCode);

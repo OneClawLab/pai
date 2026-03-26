@@ -1,10 +1,15 @@
 {
   "name": "@theclawlab/pai",
   "type": "module",
-  "version": "1.0.9",
+  "version": "2.0.0",
   "description": "pai is a linux command to interact with LLMs (with only one bash_exec tool and basic session support).",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": "./dist/index.js"
+  },
   "bin": {
-    "pai": "dist/index.js"
+    "pai": "./dist/cli.js"
   },
   "scripts": {
     "dev-old": "tsx watch src/index.ts",
