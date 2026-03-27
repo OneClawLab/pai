@@ -235,7 +235,7 @@ describe('InputResolver', () => {
       await expect(
         resolver.resolveSystemInput('Text', 'file.txt')
       ).rejects.toMatchObject({
-        exitCode: 1,
+        exitCode: 2,
         message: expect.stringContaining('Multiple system instruction sources'),
       });
     });

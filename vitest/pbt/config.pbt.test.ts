@@ -86,8 +86,8 @@ describe('resolveProvider() - Property-Based Tests', () => {
         expect(errorThrown).toBeInstanceOf(PAIError);
 
         if (errorThrown instanceof PAIError) {
-          // Verify the error has the correct exitCode (PARAMETER_ERROR = 1)
-          expect(errorThrown.exitCode).toBe(1 as ExitCode);
+          // Verify the error has the correct exitCode (ARGUMENT_ERROR = 2)
+          expect(errorThrown.exitCode).toBe(2 as ExitCode);
           // Verify error message mentions the provider name
           expect(errorThrown.message).toContain(testProviderName);
         }
@@ -187,10 +187,10 @@ describe('resolveProvider() - Property-Based Tests', () => {
           errorThrown = err as Error;
         }
 
-        // Verify error is PAIError with exitCode = 1
+        // Verify error is PAIError with exitCode = 2
         expect(errorThrown).toBeInstanceOf(PAIError);
         if (errorThrown instanceof PAIError) {
-          expect(errorThrown.exitCode).toBe(1 as ExitCode);
+          expect(errorThrown.exitCode).toBe(2 as ExitCode);
         }
       }),
       { numRuns: 40 },
@@ -221,8 +221,8 @@ describe('resolveProvider() - Property-Based Tests', () => {
         expect(errorThrown).toBeInstanceOf(PAIError);
 
         if (errorThrown instanceof PAIError) {
-          // Verify the error has the correct exitCode (PARAMETER_ERROR = 1)
-          expect(errorThrown.exitCode).toBe(1 as ExitCode);
+          // Verify the error has the correct exitCode (ARGUMENT_ERROR = 2)
+          expect(errorThrown.exitCode).toBe(2 as ExitCode);
         }
       }),
       { numRuns: 30 },

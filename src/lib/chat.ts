@@ -31,19 +31,19 @@ export async function* chat(
 
   messages.push({ role: 'user', content: input.userMessage });
 
-  // Create LLMClient from config
+  // Create LLMClient from config, filtering out null values
   const llmClient = new LLMClient({
     provider: config.provider,
     model: config.model,
     apiKey: config.apiKey,
-    stream: config.stream,
-    temperature: config.temperature,
-    maxTokens: config.maxTokens,
-    api: config.api,
-    baseUrl: config.baseUrl,
-    reasoning: config.reasoning,
-    contextWindow: config.contextWindow,
-    providerOptions: config.providerOptions,
+    ...(config.stream !== null && config.stream !== undefined && { stream: config.stream }),
+    ...(config.temperature !== null && config.temperature !== undefined && { temperature: config.temperature }),
+    ...(config.maxTokens !== null && config.maxTokens !== undefined && { maxTokens: config.maxTokens }),
+    ...(config.api !== null && config.api !== undefined && { api: config.api }),
+    ...(config.baseUrl !== null && config.baseUrl !== undefined && { baseUrl: config.baseUrl }),
+    ...(config.reasoning !== null && config.reasoning !== undefined && { reasoning: config.reasoning }),
+    ...(config.contextWindow !== null && config.contextWindow !== undefined && { contextWindow: config.contextWindow }),
+    ...(config.providerOptions !== null && config.providerOptions !== undefined && { providerOptions: config.providerOptions }),
   });
 
   // Track new messages produced in this chat session

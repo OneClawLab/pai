@@ -234,13 +234,13 @@ describe('handleEmbedCommand', () => {
   });
 
   describe('error handling', () => {
-    it('should exit with code 1 when no input is provided', async () => {
+    it('should exit with code 2 when no input is provided', async () => {
       await expect(
         handleEmbedCommand(undefined, baseOptions)
-      ).rejects.toThrow('process.exit(1)');
+      ).rejects.toThrow('process.exit(2)');
     });
 
-    it('should exit with code 1 when provider not found in config', async () => {
+    it('should exit with code 2 when provider not found in config', async () => {
       mockLoadConfig.mockResolvedValue({
         ...baseConfig,
         providers: [], // no providers
@@ -248,10 +248,10 @@ describe('handleEmbedCommand', () => {
 
       await expect(
         handleEmbedCommand('hello', baseOptions)
-      ).rejects.toThrow('process.exit(1)');
+      ).rejects.toThrow('process.exit(2)');
     });
 
-    it('should exit with code 1 when no provider configured', async () => {
+    it('should exit with code 2 when no provider configured', async () => {
       mockLoadConfig.mockResolvedValue({
         schema_version: '1.0.0',
         providers: [],
@@ -259,13 +259,13 @@ describe('handleEmbedCommand', () => {
 
       await expect(
         handleEmbedCommand('hello', baseOptions)
-      ).rejects.toThrow('process.exit(1)');
+      ).rejects.toThrow('process.exit(2)');
     });
 
-    it('should exit with code 1 for invalid batch JSON', async () => {
+    it('should exit with code 2 for invalid batch JSON', async () => {
       await expect(
         handleEmbedCommand('not json', { batch: true })
-      ).rejects.toThrow('process.exit(1)');
+      ).rejects.toThrow('process.exit(2)');
     });
 
     it('should exit with code 3 on API error', async () => {
@@ -278,22 +278,22 @@ describe('handleEmbedCommand', () => {
       ).rejects.toThrow('process.exit(3)');
     });
 
-    it('should exit with code 2 on network error', async () => {
+    it('should exit with code 1 on network error', async () => {
       mockEmbed.mockRejectedValue(
         new PAIError('Network error', ExitCode.RUNTIME_ERROR)
       );
 
       await expect(
         handleEmbedCommand('hello', baseOptions)
-      ).rejects.toThrow('process.exit(2)');
+      ).rejects.toThrow('process.exit(1)');
     });
 
-    it('should exit with code 2 on unexpected error', async () => {
+    it('should exit with code 1 on unexpected error', async () => {
       mockEmbed.mockRejectedValue(new Error('unexpected'));
 
       await expect(
         handleEmbedCommand('hello', baseOptions)
-      ).rejects.toThrow('process.exit(2)');
+      ).rejects.toThrow('process.exit(1)');
     });
   });
 

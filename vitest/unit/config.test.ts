@@ -193,7 +193,7 @@ describe('config.ts', () => {
       } catch (error) {
         expect(error).toBeInstanceOf(PAIError);
         if (error instanceof PAIError) {
-          expect(error.exitCode).toBe(ExitCode.PARAMETER_ERROR);
+          expect(error.exitCode).toBe(ExitCode.ARGUMENT_ERROR);
           expect(error.message).toContain('not found');
           expect(error.message).toContain('nonexistent');
         }
@@ -217,7 +217,7 @@ describe('config.ts', () => {
       } catch (error) {
         expect(error).toBeInstanceOf(PAIError);
         if (error instanceof PAIError) {
-          expect(error.exitCode).toBe(ExitCode.PARAMETER_ERROR);
+          expect(error.exitCode).toBe(ExitCode.ARGUMENT_ERROR);
           expect(error.message).toContain('No provider specified');
         }
       }
@@ -277,7 +277,7 @@ describe('config.ts', () => {
         } catch (error) {
           expect(error).toBeInstanceOf(PAIError);
           if (error instanceof PAIError) {
-            expect(error.exitCode).toBe(ExitCode.PARAMETER_ERROR);
+            expect(error.exitCode).toBe(ExitCode.ARGUMENT_ERROR);
             expect(error.message).toContain('No credentials found');
           }
         }

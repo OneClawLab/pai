@@ -305,7 +305,7 @@ describe('Integration Tests', () => {
         temperature: 3.0,
       });
 
-      expect(exitSpy).toHaveBeenCalledWith(1);
+      expect(exitSpy).toHaveBeenCalledWith(2);
       const errorOutput = stderrSpy.mock.calls.map((c: any) => c[0]).join('');
       expect(errorOutput).toContain('Invalid temperature');
 
@@ -327,7 +327,7 @@ describe('Integration Tests', () => {
         maxTokens: -100,
       });
 
-      expect(exitSpy).toHaveBeenCalledWith(1);
+      expect(exitSpy).toHaveBeenCalledWith(2);
       const errorOutput = stderrSpy.mock.calls.map((c: any) => c[0]).join('');
       expect(errorOutput).toContain('Invalid maxTokens');
 
@@ -350,7 +350,7 @@ describe('Integration Tests', () => {
         provider: 'nonexistent',
       });
 
-      expect(exitSpy).toHaveBeenCalledWith(1);
+      expect(exitSpy).toHaveBeenCalledWith(2);
 
       exitSpy.mockRestore();
     });
@@ -372,7 +372,7 @@ describe('Integration Tests', () => {
 
       await handleChatCommand('Hello', { config: configPath });
 
-      expect(exitSpy).toHaveBeenCalledWith(1);
+      expect(exitSpy).toHaveBeenCalledWith(2);
       const errorOutput = stderrSpy.mock.calls.map((c: any) => c[0]).join('');
       expect(errorOutput).toContain('No model specified');
 
@@ -516,7 +516,7 @@ describe('Integration Tests', () => {
         systemFile: 'file.txt',
       });
 
-      expect(exitSpy).toHaveBeenCalledWith(1);
+      expect(exitSpy).toHaveBeenCalledWith(2);
 
       exitSpy.mockRestore();
     });

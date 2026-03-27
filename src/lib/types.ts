@@ -58,7 +58,7 @@ export interface Message {
   content: MessageContent;
   name?: string; // For tool messages
   tool_call_id?: string; // For tool responses
-  timestamp?: string; // ISO8601 timestamp
+  timestamp?: string | null; // ISO8601 timestamp
   id?: string; // Optional message ID
 }
 
@@ -207,8 +207,8 @@ export interface InputSource {
 
 export enum ExitCode {
   SUCCESS = 0,
-  PARAMETER_ERROR = 1,
-  RUNTIME_ERROR = 2,
+  RUNTIME_ERROR = 1,
+  ARGUMENT_ERROR = 2,
   API_ERROR = 3,
   IO_ERROR = 4,
 }
@@ -229,23 +229,23 @@ export class PAIError extends Error {
 // ============================================================================
 
 export interface ChatInput {
-  system?: string;
+  system?: string | null;
   userMessage: MessageContent;
-  history?: Message[];
+  history?: Message[] | null;
 }
 
 export interface ChatConfig {
   provider: string;
   model: string;
   apiKey: string;
-  stream?: boolean;
-  temperature?: number;
-  maxTokens?: number;
-  api?: string;
-  baseUrl?: string;
-  reasoning?: boolean;
-  contextWindow?: number;
-  providerOptions?: Record<string, unknown>;
+  stream?: boolean | null;
+  temperature?: number | null;
+  maxTokens?: number | null;
+  api?: string | null;
+  baseUrl?: string | null;
+  reasoning?: boolean | null;
+  contextWindow?: number | null;
+  providerOptions?: Record<string, unknown> | null;
 }
 
 export interface Usage {

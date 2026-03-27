@@ -71,7 +71,7 @@ export class InputResolver {
     if (systemText && systemFile) {
       throw new PAIError(
         'Multiple system instruction sources specified',
-        1 as ExitCode,
+        2 as ExitCode,
         { message: 'Cannot use both --system and --system-file' }
       );
     }

@@ -113,7 +113,7 @@ describe('Property 1: 多输入源互斥', () => {
   // Feature: embed-command, Property 1: 多输入源互斥
   // **Validates: Requirements 1.4**
 
-  it('text + inputFile always causes exit code 1 (parameter error)', async () => {
+  it('text + inputFile always causes exit code 2 (argument error)', async () => {
     await fc.assert(
       fc.asyncProperty(textArb, filePathArb, async (text, filePath) => {
         exitCode = undefined;
@@ -125,9 +125,9 @@ describe('Property 1: 多输入源互斥', () => {
         try {
           await handleEmbedCommand(text, options);
           // Should not reach here — must throw
-          expect.unreachable('Expected process.exit(1) for multiple input sources');
+          expect.unreachable('Expected process.exit(2) for multiple input sources');
         } catch {
-          expect(exitCode).toBe(1);
+          expect(exitCode).toBe(2);
         }
       }),
       { numRuns: 100 },
@@ -193,7 +193,7 @@ describe('Property 1: 多输入源互斥', () => {
     );
   });
 
-  it('no input source causes exit code 1 (no input error)', async () => {
+  it('no input source causes exit code 2 (argument error)', async () => {
     await fc.assert(
       fc.asyncProperty(fc.constant(null), async () => {
         exitCode = undefined;
@@ -204,9 +204,9 @@ describe('Property 1: 多输入源互斥', () => {
 
         try {
           await handleEmbedCommand(undefined, {});
-          expect.unreachable('Expected process.exit(1) for no input');
+          expect.unreachable('Expected process.exit(2) for no input');
         } catch {
-          expect(exitCode).toBe(1);
+          expect(exitCode).toBe(2);
         }
       }),
       { numRuns: 100 },

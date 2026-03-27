@@ -15,7 +15,7 @@
     "dev-old": "tsx watch src/index.ts",
     "dev": "tsup --watch --onSuccess 'node dist/index.js'",
     "build": "tsup",
-    "test": "vitest",
+    "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "release:local": "npm run build && npm link",
     "release:public": "npm test && npm run build && npm publish --access public",

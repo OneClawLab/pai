@@ -48,8 +48,8 @@ describe('CLI Property-Based Tests', () => {
                 }
               );
 
-              // Property: Parameter errors should exit with code 1
-              expect(exitSpy).toHaveBeenCalledWith(1);
+              // Property: Parameter errors should exit with code 2
+              expect(exitSpy).toHaveBeenCalledWith(2);
             } finally {
               exitSpy.mockRestore();
               stderrSpy.mockRestore();
@@ -81,8 +81,8 @@ describe('CLI Property-Based Tests', () => {
                 provider: providerName,
               });
 
-              // Property: Missing provider should exit with code 1
-              expect(exitSpy).toHaveBeenCalledWith(1);
+              // Property: Missing provider should exit with code 2
+              expect(exitSpy).toHaveBeenCalledWith(2);
             } finally {
               exitSpy.mockRestore();
               stderrSpy.mockRestore();
@@ -174,8 +174,8 @@ describe('CLI Property-Based Tests', () => {
                 provider: requestedProvider,
               });
 
-              // Property: Should exit with code 1 for non-existent provider
-              expect(exitSpy).toHaveBeenCalledWith(1);
+              // Property: Should exit with code 2 for non-existent provider
+              expect(exitSpy).toHaveBeenCalledWith(2);
               
               // Property: Error should mention the provider
               const allErrors = stderrWrites.join('');
@@ -224,8 +224,8 @@ describe('CLI Property-Based Tests', () => {
                 temperature: invalidTemp,
               });
 
-              // Property: Should exit with code 1 for invalid parameters
-              expect(exitSpy).toHaveBeenCalledWith(1);
+              // Property: Should exit with code 2 for invalid parameters
+              expect(exitSpy).toHaveBeenCalledWith(2);
               
               // Property: Error message should be written to stderr
               const allErrors = stderrWrites.join('');
@@ -269,8 +269,8 @@ describe('CLI Property-Based Tests', () => {
                 maxTokens: invalidMaxTokens,
               });
 
-              // Property: Should exit with code 1 for invalid parameters
-              expect(exitSpy).toHaveBeenCalledWith(1);
+              // Property: Should exit with code 2 for invalid parameters
+              expect(exitSpy).toHaveBeenCalledWith(2);
               
               // Property: Error message should be written to stderr
               const allErrors = stderrWrites.join('');

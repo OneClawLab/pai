@@ -40,14 +40,14 @@ export async function handleChatCommand(
       if (isNaN(options.temperature) || !isFinite(options.temperature)) {
         throw new PAIError(
           'Invalid temperature value',
-          1,
+          2,
           { temperature: options.temperature, message: 'Temperature must be a finite number' }
         );
       }
       if (options.temperature < 0 || options.temperature > 2) {
         throw new PAIError(
           'Invalid temperature value',
-          1,
+          2,
           { temperature: options.temperature, message: 'Temperature must be between 0 and 2' }
         );
       }
@@ -57,14 +57,14 @@ export async function handleChatCommand(
       if (isNaN(options.maxTokens) || !isFinite(options.maxTokens)) {
         throw new PAIError(
           'Invalid maxTokens value',
-          1,
+          2,
           { maxTokens: options.maxTokens, message: 'maxTokens must be a finite number' }
         );
       }
       if (options.maxTokens <= 0) {
         throw new PAIError(
           'Invalid maxTokens value',
-          1,
+          2,
           { maxTokens: options.maxTokens, message: 'maxTokens must be greater than 0' }
         );
       }
@@ -85,7 +85,7 @@ export async function handleChatCommand(
     if (!modelName) {
       throw new PAIError(
         'No model specified',
-        1,
+        2,
         { provider: provider.name, message: 'Specify --model or configure a default model' }
       );
     }

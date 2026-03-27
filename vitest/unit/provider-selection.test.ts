@@ -88,7 +88,7 @@ describe('Provider and Model Selection', () => {
         provider: 'nonexistent',
       });
 
-      expect(exitSpy).toHaveBeenCalledWith(1);
+      expect(exitSpy).toHaveBeenCalledWith(2);
       const errorOutput = stderrSpy.mock.calls.map((c: any) => c[0]).join('');
       expect(errorOutput).toContain('nonexistent');
 
@@ -127,7 +127,7 @@ describe('Provider and Model Selection', () => {
 
       await handleChatCommand('Hello', { config: configPath });
 
-      expect(exitSpy).toHaveBeenCalledWith(1);
+      expect(exitSpy).toHaveBeenCalledWith(2);
 
       exitSpy.mockRestore();
     });
@@ -285,7 +285,7 @@ describe('Provider and Model Selection', () => {
 
       await handleChatCommand('Hello', { config: configPath });
 
-      expect(exitSpy).toHaveBeenCalledWith(1);
+      expect(exitSpy).toHaveBeenCalledWith(2);
       const errorOutput = stderrSpy.mock.calls.map((c: any) => c[0]).join('');
       expect(errorOutput).toContain('No model specified');
 

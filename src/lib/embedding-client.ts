@@ -71,7 +71,7 @@ export class EmbeddingClient {
     if (!base) {
       throw new PAIError(
         `No base URL configured for provider "${provider}". Please specify a baseUrl.`,
-        ExitCode.PARAMETER_ERROR,
+        ExitCode.ARGUMENT_ERROR,
         { provider },
       );
     }
@@ -87,14 +87,14 @@ export class EmbeddingClient {
     if (!baseUrl) {
       throw new PAIError(
         'Azure OpenAI requires a baseUrl. Please specify a baseUrl.',
-        ExitCode.PARAMETER_ERROR,
+        ExitCode.ARGUMENT_ERROR,
       );
     }
     const deployment = model ?? providerOptions?.azureDeploymentName;
     if (!deployment) {
       throw new PAIError(
         'Azure OpenAI requires a deployment name. Specify a model or set providerOptions.azureDeploymentName.',
-        ExitCode.PARAMETER_ERROR,
+        ExitCode.ARGUMENT_ERROR,
       );
     }
     const apiVersion = providerOptions?.azureApiVersion;

@@ -93,7 +93,7 @@ export async function resolveProvider(
   if (!name) {
     throw new PAIError(
       'No provider specified and no default provider configured',
-      1 as ExitCode,
+      2 as ExitCode,
       {}
     );
   }
@@ -103,7 +103,7 @@ export async function resolveProvider(
   if (!provider) {
     throw new PAIError(
       `Provider not found: ${name}`,
-      1 as ExitCode,
+      2 as ExitCode,
       { provider: name }
     );
   }
@@ -130,7 +130,7 @@ export async function resolveProvider(
 
   throw new PAIError(
     `No credentials found for provider: ${name}`,
-    1 as ExitCode,
+    2 as ExitCode,
     {
       provider: name,
       checkedSources: ['environment variable', 'config file', 'oauth'],

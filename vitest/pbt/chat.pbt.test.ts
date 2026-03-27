@@ -1,17 +1,82 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import * as fc from 'fast-check';
 import { Writable } from 'node:stream';
+
+// ============================================================================
+// Mock LLMClient — must use class syntax so `new LLMClient(...)` works
+// ============================================================================
+
+type MockInstance = {
+  chat: ReturnType<typeof vi.fn>;
+  chatComplete: ReturnType<typeof vi.fn>;
+};
+
+// Shared state so tests can swap the mock behaviour
+let _mockInstance: MockInstance = makeMockInstance();
+
+function makeMockInstance(opts?: {
+  streaming?: boolean;
+  withToolCall?: boolean;
+}): MockInstance {
+  if (opts?.streaming) {
+    return {
+      chat: vi.fn(async function* () {
+        yield { content: 'Hello ', finishReason: 'streaming' };
+        yield { content: 'world', finishReason: 'streaming' };
+        yield { content: '', finishReason: 'stop', usage: { input: 10, output: 5 } };
+      }),
+      chatComplete: vi.fn(),
+    };
+  }
+  if (opts?.withToolCall) {
+    let callCount = 0;
+    const chatCompleteMock = vi.fn(async () => {
+      callCount++;
+      if (callCount === 1) {
+        return {
+          content: '',
+          finishReason: 'tool_calls',
+          usage: { input: 10, output: 5 },
+          toolCalls: [{ id: 'call-1', name: 'test_tool', arguments: { arg: 'value' } }],
+        };
+      }
+      return { content: 'Done', finishReason: 'stop', usage: { input: 10, output: 5 } };
+    });
+    return {
+      chat: vi.fn(async function* () {
+        yield { content: 'Hello world', finishReason: 'stop', usage: { input: 10, output: 5 } };
+      }),
+      chatComplete: chatCompleteMock,
+    };
+  }
+  return {
+    chat: vi.fn(async function* () {
+      yield { content: 'Hello world', finishReason: 'stop', usage: { input: 10, output: 5 } };
+    }),
+    chatComplete: vi.fn(async () => ({
+      content: 'Hello world',
+      finishReason: 'stop',
+      usage: { input: 10, output: 5 },
+    })),
+  };
+}
+
+vi.mock('../../src/lib/llm-client.js', () => {
+  class LLMClient {
+    chat(...args: unknown[]) { return _mockInstance.chat(...args); }
+    chatComplete(...args: unknown[]) { return _mockInstance.chatComplete(...args); }
+  }
+  return { LLMClient };
+});
+
 import { chat } from '../../src/lib/chat.js';
-import type { ChatInput, ChatConfig, ChatEvent, Message, Tool } from '../../src/lib/types.js';
-import { PAIError, ExitCode } from '../../src/lib/types.js';
+import type { ChatInput, ChatConfig, ChatEvent, Tool } from '../../src/lib/types.js';
+import { PAIError } from '../../src/lib/types.js';
 
 // ============================================================================
-// Generators for fast-check
+// Arbitraries
 // ============================================================================
 
-/**
- * Generate random MessageContent (string or object)
- */
 const messageContentArb = fc.oneof(
   fc.string({ minLength: 1, maxLength: 100 }),
   fc.record({
@@ -20,27 +85,18 @@ const messageContentArb = fc.oneof(
   }),
 );
 
-/**
- * Generate random Message objects
- */
 const messageArb = fc.record({
   role: fc.constantFrom('user' as const, 'assistant' as const),
   content: messageContentArb,
   timestamp: fc.option(fc.string({ minLength: 10, maxLength: 30 })),
 });
 
-/**
- * Generate random ChatInput
- */
 const chatInputArb = fc.record({
   system: fc.option(fc.string({ minLength: 1, maxLength: 100 })),
   userMessage: messageContentArb,
   history: fc.option(fc.array(messageArb, { maxLength: 5 })),
 });
 
-/**
- * Generate random ChatConfig
- */
 const chatConfigArb = fc.record({
   provider: fc.constantFrom('openai', 'anthropic', 'gemini'),
   model: fc.constantFrom('gpt-4', 'claude-3-opus', 'gemini-pro'),
@@ -51,95 +107,29 @@ const chatConfigArb = fc.record({
 });
 
 // ============================================================================
-// Mock LLMClient for testing
-// ============================================================================
-
-/**
- * Create a mock LLMClient that returns predictable responses
- */
-function createMockLLMClient(options?: {
-  withToolCalls?: boolean;
-  shouldFail?: boolean;
-  streaming?: boolean;
-}) {
-  return {
-    async *chat(messages: Message[], tools?: Tool[]) {
-      if (options?.shouldFail) {
-        throw new Error('LLM API error');
-      }
-
-      if (options?.streaming) {
-        // Yield streaming chunks
-        yield { content: 'Hello ', finishReason: 'streaming' };
-        yield { content: 'world', finishReason: 'streaming' };
-        yield {
-          content: '',
-          finishReason: 'stop',
-          usage: { input: 10, output: 5 },
-          toolCalls: options?.withToolCalls
-            ? [{ id: 'call-1', name: 'test_tool', arguments: { arg: 'value' } }]
-            : undefined,
-        };
-      } else {
-        yield {
-          content: 'Hello world',
-          finishReason: 'stop',
-          usage: { input: 10, output: 5 },
-          toolCalls: options?.withToolCalls
-            ? [{ id: 'call-1', name: 'test_tool', arguments: { arg: 'value' } }]
-            : undefined,
-        };
-      }
-    },
-
-    async chatComplete(messages: Message[], tools?: Tool[]) {
-      if (options?.shouldFail) {
-        throw new Error('LLM API error');
-      }
-
-      return {
-        content: 'Hello world',
-        finishReason: 'stop',
-        usage: { input: 10, output: 5 },
-        toolCalls: options?.withToolCalls
-          ? [{ id: 'call-1', name: 'test_tool', arguments: { arg: 'value' } }]
-          : undefined,
-      };
-    },
-  };
-}
-
-// ============================================================================
 // Property Tests
 // ============================================================================
 
 describe('chat() - Property-Based Tests', () => {
+  beforeEach(() => {
+    _mockInstance = makeMockInstance();
+  });
+
   // ========================================================================
   // Property 1: LIB 入口无副作用
   // ========================================================================
 
-  it('Property 1: LIB 入口无副作用 - importing src/index.ts should not write to stdout/stderr', async () => {
-    // Mock stdout/stderr
-    const originalStdoutWrite = process.stdout.write;
-    const originalStderrWrite = process.stderr.write;
+  it('Property 1: importing src/index.ts should not write to stdout/stderr', async () => {
+    const originalStdoutWrite = process.stdout.write.bind(process.stdout);
+    const originalStderrWrite = process.stderr.write.bind(process.stderr);
     let stdoutCalls = 0;
     let stderrCalls = 0;
 
-    process.stdout.write = (() => {
-      stdoutCalls++;
-      return true;
-    }) as any;
-
-    process.stderr.write = (() => {
-      stderrCalls++;
-      return true;
-    }) as any;
+    process.stdout.write = (() => { stdoutCalls++; return true; }) as typeof process.stdout.write;
+    process.stderr.write = (() => { stderrCalls++; return true; }) as typeof process.stderr.write;
 
     try {
-      // Import the LIB entry point
       await import('../../src/index.js');
-
-      // Verify no writes occurred
       expect(stdoutCalls).toBe(0);
       expect(stderrCalls).toBe(0);
     } finally {
@@ -148,74 +138,45 @@ describe('chat() - Property-Based Tests', () => {
     }
   });
 
-  // Validates: Requirements 2.5
-
   // ========================================================================
   // Property 2: chat() 事件序列不变量
   // ========================================================================
 
-  it('Property 2: chat() 事件序列不变量 - events start with start and end with chat_end', async () => {
+  it('Property 2: events start with start and end with chat_end', async () => {
     await fc.assert(
       fc.asyncProperty(chatInputArb, chatConfigArb, async (input, config) => {
-        // Mock LLMClient by patching the module
-        const mockClient = createMockLLMClient();
-
-        // Spy on LLMClient constructor
-        const { LLMClient } = await import('../../src/lib/llm-client.js');
-        const originalConstructor = LLMClient;
-        const LLMClientSpy = vi.fn(() => mockClient);
-
-        // Temporarily replace LLMClient
-        const chatModule = await import('../../src/lib/chat.js');
-        const originalChat = chatModule.chat;
-
+        _mockInstance = makeMockInstance();
         const signal = new AbortController().signal;
         const events: ChatEvent[] = [];
 
-        // We can't easily mock the LLMClient in ESM, so we'll test with a real one
-        // but verify the event structure is correct
-        try {
-          for await (const event of originalChat(input, config, null, [], signal)) {
-            events.push(event);
-          }
-        } catch (err) {
-          // Expected to fail due to invalid API key, but we can still check event structure
-          if (events.length > 0) {
-            expect(events[0]?.type).toBe('start');
-          }
-          return;
+        for await (const event of chat(input, config, null, [], signal)) {
+          events.push(event);
         }
 
-        // Verify event sequence
-        if (events.length > 0) {
-          expect(events[0]?.type).toBe('start');
-          expect(events[events.length - 1]?.type).toBe('chat_end');
+        expect(events.length).toBeGreaterThan(0);
+        expect(events[0]?.type).toBe('start');
+        expect(events[events.length - 1]?.type).toBe('chat_end');
 
-          // Verify chat_end contains newMessages with at least one assistant message
-          const chatEndEvent = events[events.length - 1];
-          if (chatEndEvent?.type === 'chat_end') {
-            expect(chatEndEvent.newMessages).toBeDefined();
-            expect(Array.isArray(chatEndEvent.newMessages)).toBe(true);
-            expect(chatEndEvent.newMessages.length).toBeGreaterThan(0);
-
-            const hasAssistantMessage = chatEndEvent.newMessages.some(msg => msg.role === 'assistant');
-            expect(hasAssistantMessage).toBe(true);
-          }
+        const chatEndEvent = events[events.length - 1];
+        if (chatEndEvent?.type === 'chat_end') {
+          expect(Array.isArray(chatEndEvent.newMessages)).toBe(true);
+          expect(chatEndEvent.newMessages.length).toBeGreaterThan(0);
+          expect(chatEndEvent.newMessages.some(m => m.role === 'assistant')).toBe(true);
         }
       }),
       { numRuns: 10 },
     );
   });
 
-  // Validates: Requirements 3.4, 3.5, 3.7
-
   // ========================================================================
   // Property 3: streaming chunk 写入 Writable
   // ========================================================================
 
-  it('Property 3: streaming chunk 写入 Writable - chunks are written to Writable when streaming', async () => {
+  it('Property 3: chunks are written to Writable when streaming', async () => {
     await fc.assert(
       fc.asyncProperty(chatInputArb, async (input) => {
+        _mockInstance = makeMockInstance({ streaming: true });
+
         const config: ChatConfig = {
           provider: 'openai',
           model: 'gpt-4',
@@ -226,47 +187,33 @@ describe('chat() - Property-Based Tests', () => {
         const signal = new AbortController().signal;
         const chunks: string[] = [];
 
-        // Create a mock Writable that captures writes
         const mockWritable = new Writable({
-          write(chunk: any, encoding: string, callback: Function) {
+          write(chunk: Buffer, _encoding: BufferEncoding, callback: (error?: Error | null) => void) {
             chunks.push(chunk.toString());
             callback();
           },
         });
 
-        const { chat: chatFn } = await import('../../src/lib/chat.js');
-
-        try {
-          for await (const event of chatFn(input, config, mockWritable, [], signal)) {
-            // Consume events
-          }
-        } catch (err) {
-          // Expected to fail due to invalid API key
-          // But we can still verify that Writable handling doesn't crash
+        for await (const _event of chat(input, config, mockWritable, [], signal)) {
+          // consume
         }
 
-        // Verify that Writable was passed without error
-        expect(mockWritable).toBeDefined();
+        expect(chunks.join('')).toBe('Hello world');
       }),
       { numRuns: 5 },
     );
   });
 
-  // Validates: Requirements 3.2
-
   // ========================================================================
   // Property 4: tool 事件配对
   // ========================================================================
 
-  it('Property 4: tool 事件配对 - tool events structure is correct', async () => {
+  it('Property 4: tool events have correct structure and are paired', async () => {
     await fc.assert(
       fc.asyncProperty(chatInputArb, async (input) => {
-        const config: ChatConfig = {
-          provider: 'openai',
-          model: 'gpt-4',
-          apiKey: 'sk-test-key',
-        };
+        _mockInstance = makeMockInstance({ withToolCall: true });
 
+        const config: ChatConfig = { provider: 'openai', model: 'gpt-4', apiKey: 'sk-test' };
         const signal = new AbortController().signal;
         const testTool: Tool = {
           name: 'test_tool',
@@ -275,180 +222,111 @@ describe('chat() - Property-Based Tests', () => {
           handler: async () => ({ success: true }),
         };
 
-        const { chat: chatFn } = await import('../../src/lib/chat.js');
+        const toolCallEvents: ChatEvent[] = [];
+        const toolResultEvents: ChatEvent[] = [];
 
-        try {
-          for await (const event of chatFn(input, config, null, [testTool], signal)) {
-            // Verify event structure
-            if (event.type === 'tool_call') {
-              expect(event.callId).toBeDefined();
-              expect(event.name).toBeDefined();
-              expect(event.args).toBeDefined();
-            }
-            if (event.type === 'tool_result') {
-              expect(event.callId).toBeDefined();
-              expect(event.name).toBeDefined();
-              expect(event.result).toBeDefined();
-            }
+        for await (const event of chat(input, config, null, [testTool], signal)) {
+          if (event.type === 'tool_call') toolCallEvents.push(event);
+          if (event.type === 'tool_result') toolResultEvents.push(event);
+        }
+
+        expect(toolCallEvents.length).toBe(toolResultEvents.length);
+        for (const e of toolCallEvents) {
+          if (e.type === 'tool_call') {
+            expect(e.callId).toBeDefined();
+            expect(e.name).toBeDefined();
+            expect(e.args).toBeDefined();
           }
-        } catch (err) {
-          // Expected to fail due to invalid API key
+        }
+        for (const e of toolResultEvents) {
+          if (e.type === 'tool_result') {
+            expect(e.callId).toBeDefined();
+            expect(e.name).toBeDefined();
+            expect(e.result).toBeDefined();
+          }
         }
       }),
       { numRuns: 5 },
     );
   });
 
-  // Validates: Requirements 3.6
-
   // ========================================================================
-  // Property 5: 错误时 throw PAIError
+  // Property 5: AbortSignal 立即中止
   // ========================================================================
 
-  it('Property 5: 错误时 throw PAIError - invalid config throws PAIError', async () => {
+  it('Property 5: chat() respects AbortSignal when already aborted', async () => {
     await fc.assert(
       fc.asyncProperty(chatInputArb, async (input) => {
-        const config: ChatConfig = {
-          provider: 'invalid-provider',
-          model: 'invalid-model',
-          apiKey: '', // Empty API key
-        };
-
-        const signal = new AbortController().signal;
-
-        const { chat: chatFn } = await import('../../src/lib/chat.js');
-
-        let errorThrown: Error | undefined;
-        try {
-          for await (const event of chatFn(input, config, null, [], signal)) {
-            // Consume events
-          }
-        } catch (err) {
-          errorThrown = err as Error;
-        }
-
-        // Verify error was thrown (either PAIError or other error from LLM)
-        if (errorThrown) {
-          expect(errorThrown).toBeDefined();
-          // Either PAIError or a regular Error from the LLM client
-          expect(errorThrown instanceof Error).toBe(true);
-        }
-      }),
-      { numRuns: 5 },
-    );
-  });
-
-  // Validates: Requirements 3.9
-
-  // ========================================================================
-  // Additional Property Tests
-  // ========================================================================
-
-  it('Property: chat() respects AbortSignal', async () => {
-    await fc.assert(
-      fc.asyncProperty(chatInputArb, async (input) => {
-        const config: ChatConfig = {
-          provider: 'openai',
-          model: 'gpt-4',
-          apiKey: 'sk-test-key',
-        };
-
+        _mockInstance = makeMockInstance();
+        const config: ChatConfig = { provider: 'openai', model: 'gpt-4', apiKey: 'sk-test' };
         const controller = new AbortController();
-        const signal = controller.signal;
-
-        const { chat: chatFn } = await import('../../src/lib/chat.js');
+        controller.abort();
 
         let errorThrown: Error | undefined;
         try {
-          // Abort immediately
-          controller.abort();
-
-          for await (const event of chatFn(input, config, null, [], signal)) {
-            // Consume events
+          for await (const _event of chat(input, config, null, [], controller.signal)) {
+            // should not reach here
           }
         } catch (err) {
           errorThrown = err as Error;
         }
 
-        // Verify error was thrown due to abort
-        if (errorThrown) {
-          expect(errorThrown).toBeInstanceOf(PAIError);
-          if (errorThrown instanceof PAIError) {
-            expect(errorThrown.message).toContain('aborted');
-          }
+        expect(errorThrown).toBeInstanceOf(PAIError);
+        if (errorThrown instanceof PAIError) {
+          expect(errorThrown.message).toContain('aborted');
         }
       }),
       { numRuns: 5 },
     );
   });
 
-  // Validates: Requirements 3.10
+  // ========================================================================
+  // Property 6: start event 包含正确的 provider/model/messageCount
+  // ========================================================================
 
-  it('Property: chat() with null Writable does not crash', async () => {
+  it('Property 6: start event contains correct provider, model, messageCount', async () => {
     await fc.assert(
-      fc.asyncProperty(chatInputArb, async (input) => {
-        const config: ChatConfig = {
-          provider: 'openai',
-          model: 'gpt-4',
-          apiKey: 'sk-test-key',
-        };
-
+      fc.asyncProperty(chatInputArb, chatConfigArb, async (input, config) => {
+        _mockInstance = makeMockInstance();
         const signal = new AbortController().signal;
 
-        const { chat: chatFn } = await import('../../src/lib/chat.js');
+        let startEvent: ChatEvent | undefined;
+        for await (const event of chat(input, config, null, [], signal)) {
+          if (!startEvent && event.type === 'start') startEvent = event;
+        }
 
-        try {
-          // Pass null as chunkWriter
-          for await (const event of chatFn(input, config, null, [], signal)) {
-            // Verify events are generated
-            expect(event).toBeDefined();
-            expect(event.type).toBeDefined();
-          }
-        } catch (err) {
-          // Expected to fail due to invalid API key, but null Writable should not cause crash
-          expect(err).toBeDefined();
+        expect(startEvent).toBeDefined();
+        if (startEvent?.type === 'start') {
+          expect(startEvent.provider).toBe(config.provider);
+          expect(startEvent.model).toBe(config.model);
+          expect(startEvent.messageCount).toBeGreaterThan(0);
+          expect(startEvent.toolCount).toBe(0);
         }
       }),
-      { numRuns: 5 },
+      { numRuns: 10 },
     );
   });
 
-  // Validates: Requirements 3.2
+  // ========================================================================
+  // Property 7: null chunkWriter does not crash
+  // ========================================================================
 
-  it('Property: chat() builds correct initial messages array structure', async () => {
+  it('Property 7: chat() with null chunkWriter does not crash', async () => {
     await fc.assert(
-      fc.asyncProperty(chatInputArb, async (input) => {
-        const config: ChatConfig = {
-          provider: 'openai',
-          model: 'gpt-4',
-          apiKey: 'sk-test-key',
-        };
-
+      fc.asyncProperty(chatInputArb, chatConfigArb, async (input, config) => {
+        _mockInstance = makeMockInstance();
         const signal = new AbortController().signal;
+        const events: ChatEvent[] = [];
 
-        const { chat: chatFn } = await import('../../src/lib/chat.js');
-
-        try {
-          for await (const event of chatFn(input, config, null, [], signal)) {
-            // Verify event structure
-            if (event.type === 'start') {
-              expect(event.provider).toBe(config.provider);
-              expect(event.model).toBe(config.model);
-              expect(event.messageCount).toBeGreaterThan(0);
-              expect(event.toolCount).toBe(0);
-            }
-            if (event.type === 'chat_end') {
-              expect(event.newMessages).toBeDefined();
-              expect(Array.isArray(event.newMessages)).toBe(true);
-            }
-          }
-        } catch (err) {
-          // Expected to fail due to invalid API key
+        for await (const event of chat(input, config, null, [], signal)) {
+          events.push(event);
+          expect(event).toBeDefined();
+          expect(event.type).toBeDefined();
         }
+
+        expect(events.length).toBeGreaterThan(0);
       }),
       { numRuns: 5 },
     );
   });
-
-  // Validates: Requirements 3.1, 3.3
 });
