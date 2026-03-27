@@ -68,8 +68,18 @@ function killTree(pid: number): void {
   }
 }
 
-const BASH_EXEC_DESCRIPTION =
-  'Execute a shell command and return the result. Supports pipes, redirections, xargs, heredocs, and shell scripts. Use cwd parameter to set working directory. Running on bash.';
+const BASH_EXEC_TOOL_DESC = `
+Execute a shell command and return the result.
+Supports pipes, redirections, xargs, heredocs, and shell scripts.
+Use cwd parameter to set working directory.
+Running on bash.
+`.trim();
+
+const BASH_EXEC_ARG_COMMAND_DESC = `
+The shell command to execute. 
+Supports full bash syntax (pipes, xargs, heredocs, etc.).
+For complex logic, prioritize a human-readable multi-line format using line breaks or backslashes (\) instead of concatenating multiple commands with semicolons (;) into a single dense line.
+`.trim();
 
 /**
  * Create bash_exec tool for LLM to execute shell commands.
@@ -97,14 +107,13 @@ export function createBashExecTool(): Tool {
 
   return {
     name: 'bash_exec',
-    description: BASH_EXEC_DESCRIPTION,
+    description: BASH_EXEC_TOOL_DESC,
     parameters: {
       type: 'object',
       properties: {
         command: {
           type: 'string',
-          description:
-            'The shell command to execute. Supports bash syntax including pipes, redirections, xargs, heredocs, etc.',
+          description: BASH_EXEC_ARG_COMMAND_DESC,
         },
         cwd: {
           type: 'string',
