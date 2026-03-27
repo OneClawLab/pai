@@ -60,7 +60,7 @@ describe('EmbeddingClient', () => {
         EmbeddingClient.resolveEndpoint('azure-openai');
       } catch (e) {
         expect(e).toBeInstanceOf(PAIError);
-        expect((e as PAIError).exitCode).toBe(ExitCode.PARAMETER_ERROR);
+        expect((e as PAIError).exitCode).toBe(ExitCode.ARGUMENT_ERROR);
       }
     });
   });

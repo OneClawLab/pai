@@ -34,7 +34,7 @@ export async function handleEmbedCommand(
     if (!providerConfig) {
       throw new PAIError(
         `Provider not found: ${providerName}`,
-        ExitCode.PARAMETER_ERROR,
+        ExitCode.ARGUMENT_ERROR,
         { provider: providerName }
       );
     }
@@ -55,7 +55,7 @@ export async function handleEmbedCommand(
     if (sourceCount > 1) {
       throw new PAIError(
         'Multiple input sources specified',
-        ExitCode.PARAMETER_ERROR,
+        ExitCode.ARGUMENT_ERROR,
         { message: 'Provide input via argument, stdin, or --input-file (only one)' }
       );
     }
@@ -75,7 +75,7 @@ export async function handleEmbedCommand(
     } else {
       throw new PAIError(
         'No input text provided',
-        ExitCode.PARAMETER_ERROR,
+        ExitCode.ARGUMENT_ERROR,
         { message: 'Provide input via argument, stdin, or --input-file' }
       );
     }

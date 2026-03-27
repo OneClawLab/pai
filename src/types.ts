@@ -207,8 +207,8 @@ export interface InputSource {
 
 export enum ExitCode {
   SUCCESS = 0,
-  PARAMETER_ERROR = 1,
-  RUNTIME_ERROR = 2,
+  RUNTIME_ERROR = 1,
+  ARGUMENT_ERROR = 2,
   API_ERROR = 3,
   IO_ERROR = 4,
 }

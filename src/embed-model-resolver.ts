@@ -24,7 +24,7 @@ export function resolveEmbedModel(
   if (!provider) {
     throw new PAIError(
       'No embed provider specified and no default provider configured',
-      ExitCode.PARAMETER_ERROR
+      ExitCode.ARGUMENT_ERROR
     );
   }
 
@@ -36,7 +36,7 @@ export function resolveEmbedModel(
   if (!model) {
     throw new PAIError(
       'No embed model specified and no default embed model configured',
-      ExitCode.PARAMETER_ERROR
+      ExitCode.ARGUMENT_ERROR
     );
   }
 

@@ -82,7 +82,7 @@ describe('Property 8: baseUrl 端点构建', () => {
           expect.unreachable('Expected PAIError to be thrown');
         } catch (e) {
           expect(e).toBeInstanceOf(PAIError);
-          expect((e as PAIError).exitCode).toBe(ExitCode.PARAMETER_ERROR);
+          expect((e as PAIError).exitCode).toBe(ExitCode.ARGUMENT_ERROR);
         }
       }),
       { numRuns: 100 },

@@ -49,7 +49,7 @@ describe('parseBatchInput', () => {
     try {
       parseBatchInput('not json');
     } catch (e) {
-      expect((e as PAIError).exitCode).toBe(ExitCode.PARAMETER_ERROR);
+      expect((e as PAIError).exitCode).toBe(ExitCode.ARGUMENT_ERROR);
     }
   });
 

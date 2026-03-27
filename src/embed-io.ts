@@ -38,14 +38,14 @@ export function parseBatchInput(raw: string): string[] {
   } catch {
     throw new PAIError(
       'Invalid batch input: not valid JSON',
-      ExitCode.PARAMETER_ERROR,
+      ExitCode.ARGUMENT_ERROR,
     );
   }
 
   if (!Array.isArray(parsed)) {
     throw new PAIError(
       'Invalid batch input: expected a JSON array of strings',
-      ExitCode.PARAMETER_ERROR,
+      ExitCode.ARGUMENT_ERROR,
     );
   }
 
@@ -53,7 +53,7 @@ export function parseBatchInput(raw: string): string[] {
     if (typeof parsed[i] !== 'string') {
       throw new PAIError(
         `Invalid batch input: element at index ${i} is not a string`,
-        ExitCode.PARAMETER_ERROR,
+        ExitCode.ARGUMENT_ERROR,
       );
     }
   }

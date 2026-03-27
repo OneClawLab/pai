@@ -326,12 +326,12 @@ export async function handleChatCommand(
     } else {
       const paiError = new PAIError(
         error instanceof Error ? error.message : String(error),
-        2,
+        1,
         { originalError: String(error) }
       );
       await outputFormatter.logError(paiError);
       outputFormatter.writeError(paiError);
-      process.exit(2);
+      process.exit(1);
     }
   }
 }

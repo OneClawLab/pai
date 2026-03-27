@@ -95,7 +95,7 @@ describe('resolveEmbedModel', () => {
         resolveEmbedModel(options, config);
       } catch (e) {
         expect(e).toBeInstanceOf(PAIError);
-        expect((e as PAIError).exitCode).toBe(ExitCode.PARAMETER_ERROR);
+        expect((e as PAIError).exitCode).toBe(ExitCode.ARGUMENT_ERROR);
       }
     });
 
@@ -108,7 +108,7 @@ describe('resolveEmbedModel', () => {
         resolveEmbedModel(options, config);
       } catch (e) {
         expect(e).toBeInstanceOf(PAIError);
-        expect((e as PAIError).exitCode).toBe(ExitCode.PARAMETER_ERROR);
+        expect((e as PAIError).exitCode).toBe(ExitCode.ARGUMENT_ERROR);
       }
     });
 
@@ -121,7 +121,7 @@ describe('resolveEmbedModel', () => {
         resolveEmbedModel(options, config);
       } catch (e) {
         expect(e).toBeInstanceOf(PAIError);
-        expect((e as PAIError).exitCode).toBe(ExitCode.PARAMETER_ERROR);
+        expect((e as PAIError).exitCode).toBe(ExitCode.ARGUMENT_ERROR);
         expect((e as PAIError).message).toContain('model');
       }
     });
@@ -135,7 +135,7 @@ describe('resolveEmbedModel', () => {
         resolveEmbedModel(options, config);
       } catch (e) {
         expect(e).toBeInstanceOf(PAIError);
-        expect((e as PAIError).exitCode).toBe(ExitCode.PARAMETER_ERROR);
+        expect((e as PAIError).exitCode).toBe(ExitCode.ARGUMENT_ERROR);
       }
     });
   });

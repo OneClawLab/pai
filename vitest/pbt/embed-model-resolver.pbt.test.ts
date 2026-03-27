@@ -142,7 +142,7 @@ describe('Property 7: 嵌入模型解析优先级', () => {
             resolveEmbedModel(options, config);
           } catch (e) {
             expect(e).toBeInstanceOf(PAIError);
-            expect((e as PAIError).exitCode).toBe(ExitCode.PARAMETER_ERROR);
+            expect((e as PAIError).exitCode).toBe(ExitCode.ARGUMENT_ERROR);
           }
         }
       ),
@@ -164,7 +164,7 @@ describe('Property 7: 嵌入模型解析优先级', () => {
             resolveEmbedModel(options, config);
           } catch (e) {
             expect(e).toBeInstanceOf(PAIError);
-            expect((e as PAIError).exitCode).toBe(ExitCode.PARAMETER_ERROR);
+            expect((e as PAIError).exitCode).toBe(ExitCode.ARGUMENT_ERROR);
           }
         }
       ),
