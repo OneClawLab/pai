@@ -162,11 +162,13 @@ export function createBashExecTool(): Tool {
       return new Promise((resolve) => {
         const maxBytes = BASH_EXEC_TOOL_MAX_OUTPUT_MB * 1024 * 1024;
 
-        // detached: true → bash becomes process group leader (pgid === bash.pid)
+        // detached: true on Unix → bash becomes process group leader (pgid === bash.pid)
         // Lets us kill the entire tree with kill(-pid) on Unix.
+        // On Windows we use taskkill /F /T instead, so detached is not needed
+        // (and causes Node.js to spawn keepalive helper processes on Windows).
         const proc = spawn(shell, ['-c', args.command], {
           cwd: args.cwd,
-          detached: true,
+          detached: !IS_WIN32,
           stdio: ['ignore', 'pipe', 'pipe'],
           windowsHide: true,
         });
