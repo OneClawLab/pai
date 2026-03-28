@@ -158,8 +158,45 @@ export class LLMClient {
    * Build context for pi-ai
    */
   private buildContext(messages: Message[], tools?: Tool[]) {
+    // Sanitize messages: remove tool-call pairs that lack valid call IDs.
+    // This handles legacy thread records that were stored without tool_call_id.
+    // A tool result without a valid tool_call_id would cause a 400 from the API.
+    const validToolCallIds = new Set<string>();
+    for (const msg of messages) {
+      const toolCalls = (msg as any).tool_calls as Array<{ id?: string }> | undefined;
+      if (msg.role === 'assistant' && toolCalls) {
+        for (const tc of toolCalls) {
+          if (tc.id) validToolCallIds.add(tc.id);
+        }
+      }
+    }
+
+    const sanitized = messages.flatMap((msg): Message[] => {
+      if (msg.role === 'tool') {
+        const id = msg.tool_call_id;
+        if (!id || !validToolCallIds.has(id)) {
+          // Demote to user message so history is preserved without breaking the API
+          return [{ role: 'user', content: `[tool result: ${msg.name ?? 'unknown'}]\n${String(msg.content)}` }];
+        }
+      }
+      if (msg.role === 'assistant') {
+        const toolCalls = (msg as any).tool_calls as Array<{ id?: string }> | undefined;
+        if (toolCalls) {
+          // Strip out any tool_calls entries whose IDs are not in validToolCallIds
+          // (shouldn't happen, but be defensive)
+          const validTcs = toolCalls.filter(tc => tc.id && validToolCallIds.has(tc.id));
+          if (validTcs.length !== toolCalls.length) {
+            const patched = { ...msg } as any;
+            patched.tool_calls = validTcs.length > 0 ? validTcs : undefined;
+            return [patched as Message];
+          }
+        }
+      }
+      return [msg];
+    });
+
     // Convert messages to pi-ai format
-    const piMessages = messages.map((msg) => {
+    const piMessages = sanitized.map((msg) => {
       if (msg.role === 'system') {
         return { role: 'system' as const, content: String(msg.content) };
       } else if (msg.role === 'user') {
@@ -169,7 +206,7 @@ export class LLMClient {
       } else if (msg.role === 'tool') {
         return {
           role: 'toolResult' as const,
-          toolCallId: msg.tool_call_id || '',
+          toolCallId: msg.tool_call_id!,
           toolName: msg.name || '',
           content: [{ type: 'text' as const, text: String(msg.content) }],
           isError: false,
