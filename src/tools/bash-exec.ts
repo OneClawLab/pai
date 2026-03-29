@@ -69,10 +69,21 @@ function killTree(pid: number): void {
 }
 
 const BASH_EXEC_TOOL_DESC = `
-Execute a shell command and return the result.
-Supports pipes, redirections, xargs, heredocs, and shell scripts.
+Execute a shell command on bash and return stdout, stderr, and exitCode.
+Supports full bash syntax: pipes, redirections, xargs, heredocs, shell scripts.
 Use cwd parameter to set working directory.
-Running on bash.
+
+## Enhanced Commands (TheClaw)
+
+Beyond standard GNU/Linux commands, this system has these CLI tools:
+
+- **cmds** — Command discovery. Use \`cmds find "<intent>"\` to search for any command by natural language, \`cmds info <cmd>\` for usage details. Start here when you need a tool you're unsure about.
+- **xweb** — Internet access. \`xweb search "<query>"\` for web search, \`xweb fetch "<url>"\` to grab page content as Markdown, \`xweb explore "<url>"\` to discover site links.
+- **notifier** — Task scheduler. \`notifier task add\` for immediate tasks, \`notifier timer add\` for cron-based recurring tasks. 
+- **xdb** — Data collections. \`xdb col init <name> --policy hybrid\` to create a searchable collection, \`xdb put <col> '<json>'\` to write, \`xdb find <col> "<query>"\` for semantic/hybrid search. Backed by LanceDB + SQLite.
+- **pai** — LLM interface. \`pai chat "<msg>"\` for LLM calls (supports tool use, streaming, sessions). \`pai embed "<text>"\` for embeddings. Can implement sub-agents via session files.
+
+Use \`<cmd> --help\` for quick reference, or \`cmds find\` / \`cmds info\` for progressive discovery of all available commands.
 `.trim();
 
 const BASH_EXEC_ARG_COMMAND_DESC = `
