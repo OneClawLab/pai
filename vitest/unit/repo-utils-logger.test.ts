@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -109,10 +109,13 @@ describe('createFileLogger', () => {
 
 describe('createForegroundLogger', () => {
   it('writes to log file and returns a logger', async () => {
+    vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     const logger = await createForegroundLogger(tmpDir, 'fg');
     logger.info('fg info');
     logger.debug('fg debug');
     await logger.close();
+    vi.restoreAllMocks();
 
     const content = fs.readFileSync(path.join(tmpDir, 'fg.log'), 'utf8');
     expect(content).toContain('fg info');

@@ -63,8 +63,8 @@ function makeMockInstance(opts?: {
 
 vi.mock('../../src/lib/llm-client.js', () => {
   class LLMClient {
-    chat(...args: unknown[]) { return _mockInstance.chat(...args); }
-    chatComplete(...args: unknown[]) { return _mockInstance.chatComplete(...args); }
+    chat(...args: unknown[]) { return (_mockInstance.chat as Function)(...args); }
+    chatComplete(...args: unknown[]) { return (_mockInstance.chatComplete as Function)(...args); }
   }
   return { LLMClient };
 });
