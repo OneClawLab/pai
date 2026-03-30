@@ -5,7 +5,7 @@ import type { Tool, BashExecArgs, BashExecResult } from '../types.js';
 // MAX LENGTH in MB that bash_exec tool can output to LLM
 const BASH_EXEC_TOOL_MAX_OUTPUT_MB = 8;
 // Per-invocation timeout bounds (seconds)
-const BASH_EXEC_DEFAULT_TIMEOUT_S = 600;   // 10 minutes
+const BASH_EXEC_DEFAULT_TIMEOUT_S = 60;   // 1 minutes
 const BASH_EXEC_MAX_TIMEOUT_S     = 3600;  // 60 minutes hard cap
 
 const IS_WIN32 = platform() === 'win32';
@@ -109,7 +109,7 @@ For complex logic, prioritize a human-readable multi-line format using line brea
  * ToolRegistry.execute(). When aborted, the entire process tree spawned by
  * bash is killed immediately (Unix: SIGKILL to process group; Windows: taskkill /F /T).
  *
- * Timeout: LLM may specify timeout_seconds (default 600, max 3600).
+ * Timeout: LLM may specify timeout_seconds (default 60, max 3600).
  * A per-invocation AbortController combines the invocation timeout with the
  * session-level signal so either source can trigger cleanup.
  */
@@ -137,7 +137,7 @@ export function createBashExecTool(): Tool {
         comment: {
           type: 'string',
           description:
-            'very short briefing about intention and reason of this tool call, improve observability and auditability to the user.',
+            'very short briefing about why and how of this tool call, improve observability and auditability.',
         },
       },
       required: ['command', 'comment'],
