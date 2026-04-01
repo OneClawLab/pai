@@ -24,6 +24,7 @@ export interface ChatOptions {
 
 export interface ProviderInfo {
   name: string
+  defaultModel?: string | undefined
   contextWindow?: number | undefined
   maxTokens?: number | undefined
 }
@@ -95,6 +96,7 @@ export async function initPai(configPath?: string): Promise<Pai> {
       const { provider } = await resolve(providerName)
       return {
         name: provider.name,
+        defaultModel: provider.defaultModel,
         contextWindow: provider.contextWindow,
         maxTokens: provider.maxTokens,
       }
