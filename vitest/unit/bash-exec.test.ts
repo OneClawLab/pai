@@ -295,6 +295,33 @@ describe('bash_exec tool', () => {
     });
   });
 
+  describe('extraEnv injection', () => {
+    it('should inject extraEnv variables into the subprocess', async () => {
+      const t = createBashExecTool({ TEST_VAR: 'hello' });
+      const result = await t.handler({ command: 'echo $TEST_VAR' });
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).toContain('hello');
+    });
+
+    it('should merge extraEnv with existing process.env', async () => {
+      const t = createBashExecTool({ EXTRA_KEY: 'extra_value' });
+      // PATH should still be available from process.env
+      const result = await t.handler({ command: 'echo $EXTRA_KEY && echo $PATH' });
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).toContain('extra_value');
+      expect(result.stdout.trim().length).toBeGreaterThan('extra_value'.length);
+    });
+
+    it('should not inject extraEnv when not provided', async () => {
+      const t = createBashExecTool();
+      // Without extraEnv, an unset var should expand to empty string
+      const result = await t.handler({ command: 'echo "val=${UNSET_TEST_VAR_XYZ}"' });
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).toContain('val=');
+      expect(result.stdout).not.toContain('hello');
+    });
+  });
+
   describe('Property-Based Tests', () => {
     it('should always return stdout, stderr, and exitCode fields', async () => {
       const t = createBashExecTool();

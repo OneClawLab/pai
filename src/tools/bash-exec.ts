@@ -113,7 +113,7 @@ For complex logic, prioritize a human-readable multi-line format using line brea
  * A per-invocation AbortController combines the invocation timeout with the
  * session-level signal so either source can trigger cleanup.
  */
-export function createBashExecTool(): Tool {
+export function createBashExecTool(extraEnv?: Record<string, string>): Tool {
   const shell = detectShell();
 
   return {
@@ -182,6 +182,7 @@ export function createBashExecTool(): Tool {
           detached: !IS_WIN32,
           stdio: ['ignore', 'pipe', 'pipe'],
           windowsHide: true,
+          env: extraEnv ? { ...process.env, ...extraEnv } : undefined,
         });
 
         const stdoutChunks: Buffer[] = [];
