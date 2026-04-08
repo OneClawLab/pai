@@ -1,5 +1,5 @@
 import type { Writable } from 'node:stream';
-import type { ChatInput, ChatConfig, ChatEvent, Message, Tool } from './types.js';
+import type { ChatInput, ChatConfig, ChatEvent, Message, Tool, ChatHooks } from './types.js';
 import { PAIError, ExitCode } from './types.js';
 import { LLMClient } from './llm-client.js';
 
@@ -17,6 +17,7 @@ export async function* chat(
   tools: Tool[],
   signal: AbortSignal,
   maxTurns?: number,
+  hooks?: ChatHooks,
 ): AsyncGenerator<ChatEvent> {
   // Build initial messages array: system + history + userMessage
   const messages: Message[] = [];
@@ -174,10 +175,18 @@ export async function* chat(
           newMessages.push(toolResultMessage);
         }
 
+        // Allow caller to inject messages (e.g. mid-turn user updates) before next LLM call
+        if (hooks?.onBeforeNextTurn) {
+          const injected = await hooks.onBeforeNextTurn(messages)
+          if (injected.length > 0) {
+            messages.push(...injected)
+            newMessages.push(...injected)
+          }
+        }
+
         // Continue loop to get model response after tool execution
         continueLoop = true;
-      } else {
-        // No tool calls - conversation complete
+      } else {        // No tool calls - conversation complete
         continueLoop = false;
       }
     }

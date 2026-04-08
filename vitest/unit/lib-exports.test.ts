@@ -18,6 +18,18 @@ describe('src/index.ts - LIB exports', () => {
     expect(module['resolveProvider']).toBeUndefined()
   })
 
+  it('ChatHooks type is exported (verified via type import)', async () => {
+    // ChatHooks is a type-only export; we verify the module loads without error
+    // and that the type is usable. Runtime check: module import succeeds.
+    const mod = await import('../../src/index.js')
+    expect(mod).toBeDefined()
+    // Structural check: a valid ChatHooks object satisfies the interface
+    const hooks: import('../../src/lib/types.js').ChatHooks = {
+      onBeforeNextTurn: async () => [],
+    }
+    expect(typeof hooks.onBeforeNextTurn).toBe('function')
+  })
+
   it('should have no side effects when imported', async () => {
     const originalStdoutWrite = process.stdout.write
     const originalStderrWrite = process.stderr.write

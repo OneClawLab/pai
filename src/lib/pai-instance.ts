@@ -9,7 +9,7 @@
  */
 
 import type { Writable } from 'node:stream'
-import type { ChatInput, ChatEvent, Tool, PAIConfig, ProviderConfig } from './types.js'
+import type { ChatInput, ChatEvent, Tool, ChatHooks, PAIConfig, ProviderConfig } from './types.js'
 import { chat } from './chat.js'
 import { loadConfig, resolveProvider } from './config.js'
 
@@ -36,6 +36,7 @@ export interface Pai {
     chunkWriter?: Writable | null,
     tools?: Tool[],
     signal?: AbortSignal,
+    hooks?: ChatHooks,
   ): AsyncGenerator<ChatEvent>
 
   /** Get resolved provider info (for context window / budget calculations) */
@@ -64,6 +65,7 @@ export async function initPai(configPath?: string): Promise<Pai> {
       chunkWriter?: Writable | null,
       tools?: Tool[],
       signal?: AbortSignal,
+      hooks?: ChatHooks,
     ): AsyncGenerator<ChatEvent> {
       const { provider, apiKey } = await resolve(opts?.provider)
 
@@ -89,7 +91,7 @@ export async function initPai(configPath?: string): Promise<Pai> {
         ...(provider.providerOptions !== undefined && { providerOptions: provider.providerOptions }),
       }
 
-      yield* chat(input, chatConfig, chunkWriter ?? null, tools ?? [], signal ?? new AbortController().signal, opts?.maxTurns)
+      yield* chat(input, chatConfig, chunkWriter ?? null, tools ?? [], signal ?? new AbortController().signal, opts?.maxTurns, hooks)
     },
 
     async getProviderInfo(providerName?: string): Promise<ProviderInfo> {

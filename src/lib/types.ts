@@ -263,3 +263,16 @@ export type ChatEvent =
   | { type: 'tool_result'; callId: string; name: string; result: unknown }
   | { type: 'complete'; finishReason: string; usage?: Usage }
   | { type: 'chat_end'; newMessages: Message[] };
+
+/**
+ * Hooks for intercepting the chat loop at well-defined points.
+ */
+export interface ChatHooks {
+  /**
+   * Called after all tool results in a turn are appended to messages,
+   * immediately before the next LLM HTTP call is made.
+   * Return additional messages to inject (e.g. mid-turn user updates), or [] to skip.
+   * Injected messages are appended to the conversation and included in newMessages.
+   */
+  onBeforeNextTurn?: (messages: readonly Message[]) => Promise<Message[]>
+}

@@ -4,6 +4,7 @@ export type { Pai, ChatOptions as PaiChatOptions, ProviderInfo } from './lib/pai
 export type {
   ChatInput,
   ChatEvent,
+  ChatHooks,
   Message,
   MessageContent,
   Tool,
