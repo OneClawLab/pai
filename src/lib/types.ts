@@ -73,6 +73,19 @@ export interface Tool {
   handler: (args: unknown, signal?: AbortSignal) => Promise<unknown>;
 }
 
+/**
+ * Type-safe tool factory. Provides typed args/return inside the handler while
+ * producing a plain `Tool` compatible with `Tool[]` arrays in chat().
+ */
+export function defineTool<TInput, TOutput>(tool: {
+  name: string
+  description: string
+  parameters: object
+  handler: (args: TInput, signal?: AbortSignal) => Promise<TOutput>
+}): Tool {
+  return tool as unknown as Tool
+}
+
 export interface ToolCall {
   id: string;
   name: string;
