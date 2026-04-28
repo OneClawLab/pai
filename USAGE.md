@@ -729,9 +729,16 @@ JSON mode (`--json`) — batch:
 
 ### `pai image`
 
-Generate or edit images using OpenAI or Azure OpenAI image models (e.g. `gpt-image-2`).
+Generate or edit images using OpenAI or Azure OpenAI image models.
+
+Supported models: `gpt-image-2`, `gpt-image-1.5`, `gpt-image-1`, `gpt-image-1-mini`. All share the same API format; differences are in capability and cost.
 
 When `--image` is provided, switches to **edit mode** (calls `/images/edits` with multipart upload). Otherwise uses **generation mode** (`/images/generations`).
+
+**Provider/model resolution priority** (high → low):
+1. CLI `--provider` / `--model`
+2. Config `defaultImageProvider` / `defaultImageModel`
+3. Config `defaultProvider` (provider only; model must be specified)
 
 **Options:**
 - `--provider <name>` - Provider name
@@ -744,7 +751,7 @@ When `--image` is provided, switches to **edit mode** (calls `/images/edits` wit
 - `--output-format <fmt>` - Output format: `png` (default), `jpeg`, `webp` (generation only)
 - `--background <type>` - Background: `auto` (default), `transparent` (generation only, PNG)
 - `--image <path...>` - Input image(s) for editing (switches to edit mode)
-- `--mask <path>` - Mask image for inpainting (PNG, transparent areas = edit region)
+- `--mask <path>` - Mask image for inpainting (edit mode only; PNG, transparent areas = edit region)
 - `--input-file <path>` - Read prompt from file
 - `--json` - Output as JSON
 - `--quiet` - Suppress progress output
@@ -792,6 +799,9 @@ pai image "replace the sky with a sunset" --image photo.png --mask sky_mask.png 
 
 # Edit with specific quality and size
 pai image "make it look like a watercolor painting" --image photo.png --quality high --size 1536x1024 --output watercolor.png
+
+# Edit without --output (base64 to stdout, same as generation mode)
+pai image "add a frame" --image photo.png | base64 -d > framed.png
 ```
 
 **Output behavior:**
@@ -803,6 +813,7 @@ With `--output <path>`:
 
 Without `--output`:
 - stdout outputs base64-encoded image data, one per line (one line per image)
+- This applies to both generation and edit modes
 
 JSON mode (`--json`) with `--output`:
 ```json
@@ -815,9 +826,19 @@ JSON mode (`--json`) without `--output`:
 ```
 
 **Edit mode notes:**
-- Input images must be PNG or JPG, under 50 MB each
+- Input images must be PNG, JPG, or WebP, under 50 MB each
 - The mask is optional; without it, the model decides what to edit based on the prompt
+- `--mask` is only used in edit mode (ignored without `--image`)
 - `--output-format` and `--background` are ignored in edit mode (API limitation)
+
+**Exit codes:**
+
+| Code | Meaning |
+|------|---------|
+| `0` | Success |
+| `2` | Argument error (invalid size, quality, missing prompt, etc.) |
+| `3` | API error (provider returned an error, e.g. content filter, 429 rate limit) |
+| `4` | IO error (file not found, write failure) |
 
 ### `pai model list`
 

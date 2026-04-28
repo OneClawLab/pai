@@ -105,7 +105,7 @@ const imageCmd = program
   .description('Generate images from text prompts')
   .argument('[prompt]', 'Text prompt (or use stdin/--input-file)')
   .option('--provider <name>', 'Provider name')
-  .option('--model <name>', 'Image model name (e.g. gpt-image-1)')
+  .option('--model <name>', 'Image model name (e.g. gpt-image-2)')
   .option('--config <path>', 'Config file path')
   .option('--size <WxH>', 'Image size: 1024x1024, 1024x1536, 1536x1024, auto (default: 1024x1024)')
   .option('--quality <level>', 'Quality: low, medium, high, auto (default: high)')
