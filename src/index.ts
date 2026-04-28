@@ -2,7 +2,7 @@ export { createBashExecTool } from './tools/bash-exec.js';
 export { initPai } from './lib/pai-instance.js';
 export { defineTool } from './lib/types.js';
 export { ImageClient } from './image-client.js';
-export type { ImageClientConfig, ImageGenerationRequest, ImageGenerationResponse, GeneratedImage } from './image-client.js';
+export type { ImageClientConfig, ImageGenerationRequest, ImageEditRequest, ImageGenerationResponse, GeneratedImage } from './image-client.js';
 export type { Pai, ChatOptions as PaiChatOptions, ProviderInfo } from './lib/pai-instance.js';
 export type {
   ChatInput,

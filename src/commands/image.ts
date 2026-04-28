@@ -147,6 +147,7 @@ export async function handleImageCommand(
       data: {
         provider: providerName,
         model: modelName,
+        mode: (options.image && options.image.length > 0) ? 'edit' : 'generate',
         size,
         quality,
         n,
@@ -179,14 +180,51 @@ export async function handleImageCommand(
 
     const client = new ImageClient(clientConfig);
 
-    const response = await client.generate({
-      prompt: resolvedPrompt,
-      n,
-      size,
-      quality,
-      outputFormat,
-      background,
-    });
+    // Determine mode: edit (--image provided) or generate
+    const isEditMode = options.image && options.image.length > 0;
+
+    let response: import('../image-client.js').ImageGenerationResponse;
+
+    if (isEditMode) {
+      // Validate input images exist
+      const { existsSync } = await import('node:fs');
+      for (const imgPath of options.image!) {
+        if (!existsSync(imgPath)) {
+          throw new PAIError(
+            `Input image not found: ${imgPath}`,
+            ExitCode.IO_ERROR,
+            { path: imgPath },
+          );
+        }
+      }
+      if (options.mask) {
+        if (!existsSync(options.mask)) {
+          throw new PAIError(
+            `Mask image not found: ${options.mask}`,
+            ExitCode.IO_ERROR,
+            { path: options.mask },
+          );
+        }
+      }
+
+      response = await client.edit({
+        prompt: resolvedPrompt,
+        images: options.image!,
+        mask: options.mask,
+        n,
+        size,
+        quality,
+      });
+    } else {
+      response = await client.generate({
+        prompt: resolvedPrompt,
+        n,
+        size,
+        quality,
+        outputFormat,
+        background,
+      });
+    }
 
     // Output progress complete
     outputFormatter.writeProgress({

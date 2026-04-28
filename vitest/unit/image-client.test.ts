@@ -64,6 +64,11 @@ describe('ImageClient', () => {
         expect((e as PAIError).exitCode).toBe(ExitCode.ARGUMENT_ERROR);
       }
     });
+
+    it('should resolve edits endpoint when path is edits', () => {
+      const url = ImageClient.resolveEndpoint('openai', undefined, 'edits');
+      expect(url).toBe('https://api.openai.com/v1/images/edits');
+    });
   });
 
   describe('resolveAzureEndpoint', () => {
@@ -118,6 +123,18 @@ describe('ImageClient', () => {
 
     it('should throw when no deployment name and no model', () => {
       expect(() => ImageClient.resolveAzureEndpoint('https://x.openai.azure.com', undefined)).toThrow(PAIError);
+    });
+
+    it('should resolve Azure edits endpoint when path is edits', () => {
+      const url = ImageClient.resolveAzureEndpoint(
+        'https://my-resource.openai.azure.com',
+        'gpt-image-2',
+        { azureApiVersion: '2025-04-01-preview' },
+        'edits',
+      );
+      expect(url).toBe(
+        'https://my-resource.openai.azure.com/openai/deployments/gpt-image-2/images/edits?api-version=2025-04-01-preview',
+      );
     });
   });
 
@@ -364,6 +381,107 @@ describe('ImageClient', () => {
 
       const [url] = fetchMock.mock.calls[0]!;
       expect(url).toBe('https://my-proxy.example.com/v1/images/generations');
+    });
+  });
+
+  // ---- edit() ----
+
+  describe('edit', () => {
+    it('should call the edits endpoint with multipart form data', async () => {
+      const fetchMock = mockFetchResponse(makeImageResponse(1));
+      globalThis.fetch = fetchMock;
+
+      // Create a temp image file for the test
+      const { writeFileSync, unlinkSync } = await import('node:fs');
+      const tmpPath = 'vitest_tmp_test_image.png';
+      writeFileSync(tmpPath, Buffer.from('fake-png-data'));
+
+      try {
+        const client = new ImageClient({
+          provider: 'openai',
+          apiKey: 'sk-test',
+          model: 'gpt-image-2',
+        });
+
+        const result = await client.edit({
+          prompt: 'add a hat',
+          images: [tmpPath],
+          n: 1,
+          size: '1024x1024',
+          quality: 'high',
+        });
+
+        expect(fetchMock).toHaveBeenCalledOnce();
+        const [url, options] = fetchMock.mock.calls[0]!;
+        expect(url).toBe('https://api.openai.com/v1/images/edits');
+        expect(options.method).toBe('POST');
+        expect(options.headers['Authorization']).toBe('Bearer sk-test');
+        // Content-Type should NOT be set (fetch sets it for FormData)
+        expect(options.headers['Content-Type']).toBeUndefined();
+        // Body should be FormData
+        expect(options.body).toBeInstanceOf(FormData);
+
+        expect(result.images).toHaveLength(1);
+        expect(result.created).toBe(1698435368);
+      } finally {
+        unlinkSync(tmpPath);
+      }
+    });
+
+    it('should use Azure edits endpoint with api-key header', async () => {
+      const fetchMock = mockFetchResponse(makeImageResponse(1));
+      globalThis.fetch = fetchMock;
+
+      const { writeFileSync, unlinkSync } = await import('node:fs');
+      const tmpPath = 'vitest_tmp_test_image2.png';
+      writeFileSync(tmpPath, Buffer.from('fake-png-data'));
+
+      try {
+        const client = new ImageClient({
+          provider: 'azure-openai',
+          apiKey: 'azure-key',
+          model: 'gpt-image-2',
+          api: 'azure-openai-responses',
+          baseUrl: 'https://my-resource.openai.azure.com',
+          providerOptions: { azureApiVersion: '2025-04-01-preview' },
+        });
+
+        await client.edit({
+          prompt: 'add a hat',
+          images: [tmpPath],
+        });
+
+        const [url, options] = fetchMock.mock.calls[0]!;
+        expect(url).toContain('/images/edits');
+        expect(url).toContain('my-resource.openai.azure.com');
+        expect(options.headers['api-key']).toBe('azure-key');
+        expect(options.headers['Authorization']).toBeUndefined();
+      } finally {
+        unlinkSync(tmpPath);
+      }
+    });
+
+    it('should throw PAIError on API error', async () => {
+      globalThis.fetch = mockFetchResponse({ error: { message: 'Bad request' } }, 400);
+
+      const { writeFileSync, unlinkSync } = await import('node:fs');
+      const tmpPath = 'vitest_tmp_test_image3.png';
+      writeFileSync(tmpPath, Buffer.from('fake-png-data'));
+
+      try {
+        const client = new ImageClient({
+          provider: 'openai',
+          apiKey: 'sk-test',
+          model: 'gpt-image-2',
+        });
+
+        await expect(client.edit({
+          prompt: 'edit this',
+          images: [tmpPath],
+        })).rejects.toThrow(PAIError);
+      } finally {
+        unlinkSync(tmpPath);
+      }
     });
   });
 });

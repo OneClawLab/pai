@@ -66,13 +66,19 @@ Examples:
   $ pai image "abstract art" -n 3 --output art.png
   $ pai image "icon of a rocket" --background transparent --output rocket.png
   $ pai image "logo design" --json                    # JSON 输出（含 base64）
+  $ pai image "add a hat to the cat" --image cat.png --output cat2.png  # 编辑模式
+  $ pai image "remove background" --image photo.png --mask mask.png --output result.png
 
 Stdin:
   支持通过管道传入 prompt。与位置参数和 --input-file 互斥。
 
 Output:
   --output <path>: 保存到文件（多张图片自动加 _1, _2 后缀）
-  无 --output: stdout 输出 base64 字符串（每张一行）`;
+  无 --output: stdout 输出 base64 字符串（每张一行）
+
+Edit mode:
+  --image <path...>: 提供输入图片，自动切换到编辑模式（/images/edits）
+  --mask <path>: 可选蒙版图片（PNG，透明区域 = 编辑区域）`;
 
 const MODEL_LIST_EXAMPLES = `
 Examples:

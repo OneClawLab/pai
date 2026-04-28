@@ -161,6 +161,8 @@ export interface ImageOptions extends CLIOptions {
   outputFormat?: string;
   background?: string;
   inputFile?: string;
+  image?: string[];
+  mask?: string;
 }
 
 export interface ModelConfigOptions extends CLIOptions {

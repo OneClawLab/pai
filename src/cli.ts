@@ -113,6 +113,8 @@ const imageCmd = program
   .option('--output <path>', 'Output file path (omit for base64 to stdout)')
   .option('--output-format <fmt>', 'Output format: png, jpeg, webp (default: png)')
   .option('--background <type>', 'Background: auto, transparent (default: auto)')
+  .option('--image <path...>', 'Input image(s) for editing (switches to edit mode)')
+  .option('--mask <path>', 'Mask image for inpainting (PNG, transparent areas = edit region)')
   .option('--input-file <path>', 'Read prompt from file')
   .option('--json', 'Output as JSON')
   .option('--quiet', 'Suppress progress output')

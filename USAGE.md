@@ -729,18 +729,22 @@ JSON mode (`--json`) — batch:
 
 ### `pai image`
 
-Generate images from text prompts using OpenAI or Azure OpenAI image generation models (e.g. `gpt-image-1`).
+Generate or edit images using OpenAI or Azure OpenAI image models (e.g. `gpt-image-2`).
+
+When `--image` is provided, switches to **edit mode** (calls `/images/edits` with multipart upload). Otherwise uses **generation mode** (`/images/generations`).
 
 **Options:**
 - `--provider <name>` - Provider name
-- `--model <name>` - Image model name (e.g. `gpt-image-1`)
+- `--model <name>` - Image model name (e.g. `gpt-image-2`)
 - `--config <path>` - Config file path
 - `--size <WxH>` - Image size: `1024x1024` (default), `1024x1536`, `1536x1024`, `auto`
 - `--quality <level>` - Quality: `low`, `medium`, `high` (default), `auto`
 - `-n <number>` - Number of images to generate, 1-10 (default: 1)
 - `--output <path>` - Output file path (omit for base64 to stdout)
-- `--output-format <fmt>` - Output format: `png` (default), `jpeg`, `webp`
-- `--background <type>` - Background: `auto` (default), `transparent` (PNG only)
+- `--output-format <fmt>` - Output format: `png` (default), `jpeg`, `webp` (generation only)
+- `--background <type>` - Background: `auto` (default), `transparent` (generation only, PNG)
+- `--image <path...>` - Input image(s) for editing (switches to edit mode)
+- `--mask <path>` - Mask image for inpainting (PNG, transparent areas = edit region)
 - `--input-file <path>` - Read prompt from file
 - `--json` - Output as JSON
 - `--quiet` - Suppress progress output
@@ -750,34 +754,44 @@ Generate images from text prompts using OpenAI or Azure OpenAI image generation 
 2. stdin: `echo "a futuristic city" | pai image`
 3. File: `pai image --input-file prompt.txt`
 
-**Examples:**
+**Generation examples:**
 
 ```bash
 # Basic image generation, save to file
-pai image "a cat wearing a top hat" --provider my-azure --model gpt-image-1 --output cat.png
+pai image "a cat wearing a top hat" --output cat.png
 
 # High quality wide image
 pai image "sunset over mountains" --size 1536x1024 --quality high --output sunset.png
 
 # From stdin
-echo "a futuristic city" | pai image --provider my-azure --model gpt-image-1 --output city.png
+echo "a futuristic city" | pai image --output city.png
 
 # Generate multiple images
 pai image "abstract art" -n 3 --output art.png
 # Saves: art_1.png, art_2.png, art_3.png
 
-# JSON output (includes base64 and revised_prompt)
-pai image "logo design" --json --output logo.png
-
 # Transparent background (PNG only)
 pai image "icon of a rocket" --background transparent --output rocket.png
 
-# Pipe base64 output (no --output)
-pai image "logo design" | base64 -d > logo.png
-
-# Using default image provider/model (after configuring)
-pai model default --image-provider my-azure --image-model gpt-image-1
+# Using default image provider/model
+pai model default --image-provider my-azure --image-model gpt-image-2
 pai image "a cat" --output cat.png
+```
+
+**Edit examples:**
+
+```bash
+# Edit an existing image (add a hat to the cat)
+pai image "add a top hat to the cat" --image cat.png --output cat_hat.png
+
+# Edit with multiple reference images
+pai image "combine these into a collage" --image photo1.png --image photo2.png --output collage.png
+
+# Inpainting with a mask (transparent areas in mask = regions to edit)
+pai image "replace the sky with a sunset" --image photo.png --mask sky_mask.png --output sunset.png
+
+# Edit with specific quality and size
+pai image "make it look like a watercolor painting" --image photo.png --quality high --size 1536x1024 --output watercolor.png
 ```
 
 **Output behavior:**
@@ -799,6 +813,11 @@ JSON mode (`--json`) without `--output`:
 ```json
 {"images":[{"b64_json":"...","revised_prompt":"a cute cat wearing a top hat"}],"created":1698435368}
 ```
+
+**Edit mode notes:**
+- Input images must be PNG or JPG, under 50 MB each
+- The mask is optional; without it, the model decides what to edit based on the prompt
+- `--output-format` and `--background` are ignored in edit mode (API limitation)
 
 ### `pai model list`
 
