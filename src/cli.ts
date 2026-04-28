@@ -4,9 +4,10 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { handleChatCommand } from './commands/chat.js';
 import { handleEmbedCommand } from './commands/embed.js';
+import { handleImageCommand } from './commands/image.js';
 import { handleModelList, handleModelConfig, handleModelDefault, handleModelLogin, handleModelResolve } from './commands/model.js';
 import { installHelp, addSubcommandExamples } from './help.js';
-import type { ChatOptions, EmbedOptions, ModelConfigOptions } from './types.js';
+import type { ChatOptions, EmbedOptions, ImageOptions, ModelConfigOptions } from './types.js';
 
 // Gracefully handle EPIPE (e.g. `pai embed "x" | head` or broken pipe)
 process.stdout.on('error', (err: NodeJS.ErrnoException) => {
@@ -98,6 +99,28 @@ const embedCmd = program
   });
 addSubcommandExamples(embedCmd, 'embed');
 
+// Image command
+const imageCmd = program
+  .command('image')
+  .description('Generate images from text prompts')
+  .argument('[prompt]', 'Text prompt (or use stdin/--input-file)')
+  .option('--provider <name>', 'Provider name')
+  .option('--model <name>', 'Image model name (e.g. gpt-image-1)')
+  .option('--config <path>', 'Config file path')
+  .option('--size <WxH>', 'Image size: 1024x1024, 1024x1536, 1536x1024, auto (default: 1024x1024)')
+  .option('--quality <level>', 'Quality: low, medium, high, auto (default: high)')
+  .option('-n <number>', 'Number of images to generate, 1-10 (default: 1)', parseInt)
+  .option('--output <path>', 'Output file path (omit for base64 to stdout)')
+  .option('--output-format <fmt>', 'Output format: png, jpeg, webp (default: png)')
+  .option('--background <type>', 'Background: auto, transparent (default: auto)')
+  .option('--input-file <path>', 'Read prompt from file')
+  .option('--json', 'Output as JSON')
+  .option('--quiet', 'Suppress progress output')
+  .action(async (prompt: string | undefined, options: ImageOptions) => {
+    await handleImageCommand(prompt, options);
+  });
+addSubcommandExamples(imageCmd, 'image');
+
 // Model list command
 const modelCommand = program
   .command('model')
@@ -152,6 +175,8 @@ modelCommand
   .option('--name <name>', 'Provider name to set as default')
   .option('--embed-provider <name>', 'Set default embed embed provider')
   .option('--embed-model <model>', 'Set default embed model')
+  .option('--image-provider <name>', 'Set default image provider')
+  .option('--image-model <model>', 'Set default image model')
   .option('--json', 'Output as JSON')
   .action(async (options: ModelConfigOptions) => {
     await handleModelDefault(options);

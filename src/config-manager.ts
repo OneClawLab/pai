@@ -241,6 +241,32 @@ export class ConfigurationManager {
   }
 
   /**
+   * Set the default image provider and/or model
+   */
+  async setDefaultImage(imageProvider?: string, imageModel?: string): Promise<void> {
+    const config = await this.loadConfig();
+
+    if (imageProvider) {
+      // Verify provider exists
+      const exists = config.providers.some((p) => p.name === imageProvider);
+      if (!exists) {
+        throw new PAIError(
+          `Provider not found: ${imageProvider}`,
+          1 as ExitCode,
+          { provider: imageProvider, configPath: this.configPath }
+        );
+      }
+      config.defaultImageProvider = imageProvider;
+    }
+
+    if (imageModel) {
+      config.defaultImageModel = imageModel;
+    }
+
+    await this.saveConfig(config);
+  }
+
+  /**
    * Delete a provider configuration
    */
   async deleteProvider(name: string): Promise<void> {

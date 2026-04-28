@@ -30,6 +30,8 @@ export async function handleModelList(options: ModelConfigOptions): Promise<void
         const output = {
           defaultEmbedProvider: config.defaultEmbedProvider ?? null,
           defaultEmbedModel: config.defaultEmbedModel ?? null,
+          defaultImageProvider: config.defaultImageProvider ?? null,
+          defaultImageModel: config.defaultImageModel ?? null,
           providers: allProviders.map((provider) => {
             const models = getModels(provider as any);
             const configured = config.providers.some((p) => p.name === provider);
@@ -77,6 +79,8 @@ export async function handleModelList(options: ModelConfigOptions): Promise<void
           defaultProvider: config.defaultProvider ?? null,
           defaultEmbedProvider: config.defaultEmbedProvider ?? null,
           defaultEmbedModel: config.defaultEmbedModel ?? null,
+          defaultImageProvider: config.defaultImageProvider ?? null,
+          defaultImageModel: config.defaultImageModel ?? null,
           providers: config.providers.map((p) => ({
             name: p.name,
             provider: p.name,
@@ -350,20 +354,26 @@ export async function handleModelDefault(options: ModelConfigOptions): Promise<v
 
   try {
     const hasSetEmbed = options.embedProvider || options.embedModel;
+    const hasSetImage = options.imageProvider || options.imageModel;
 
-    if (options.name || hasSetEmbed) {
-      // Set default provider and/or embed settings
+    if (options.name || hasSetEmbed || hasSetImage) {
+      // Set default provider and/or embed/image settings
       if (options.name) {
         await configManager.setDefaultProvider(options.name);
       }
       if (hasSetEmbed) {
         await configManager.setDefaultEmbed(options.embedProvider, options.embedModel);
       }
+      if (hasSetImage) {
+        await configManager.setDefaultImage(options.imageProvider, options.imageModel);
+      }
 
       const parts: string[] = [];
       if (options.name) parts.push(`Default provider set to "${options.name}".`);
       if (options.embedProvider) parts.push(`Default embed provider set to "${options.embedProvider}".`);
       if (options.embedModel) parts.push(`Default embed model set to "${options.embedModel}".`);
+      if (options.imageProvider) parts.push(`Default image provider set to "${options.imageProvider}".`);
+      if (options.imageModel) parts.push(`Default image model set to "${options.imageModel}".`);
       console.log(parts.join('\n'));
     } else {
       // Show current defaults
@@ -374,6 +384,8 @@ export async function handleModelDefault(options: ModelConfigOptions): Promise<v
           defaultProvider: config.defaultProvider ?? null,
           defaultEmbedProvider: config.defaultEmbedProvider ?? null,
           defaultEmbedModel: config.defaultEmbedModel ?? null,
+          defaultImageProvider: config.defaultImageProvider ?? null,
+          defaultImageModel: config.defaultImageModel ?? null,
         }));
       } else {
         if (config.defaultProvider) {
@@ -387,6 +399,12 @@ export async function handleModelDefault(options: ModelConfigOptions): Promise<v
           if (config.defaultEmbedProvider) embedParts.push(`provider: ${config.defaultEmbedProvider}`);
           if (config.defaultEmbedModel) embedParts.push(`model: ${config.defaultEmbedModel}`);
           console.log(`Default embed: ${embedParts.join(', ')}`);
+        }
+        if (config.defaultImageProvider || config.defaultImageModel) {
+          const imageParts: string[] = [];
+          if (config.defaultImageProvider) imageParts.push(`provider: ${config.defaultImageProvider}`);
+          if (config.defaultImageModel) imageParts.push(`model: ${config.defaultImageModel}`);
+          console.log(`Default image: ${imageParts.join(', ')}`);
         }
       }
     }
@@ -449,6 +467,10 @@ export async function handleModelResolve(options: ModelConfigOptions & { model?:
         embed: {
           provider: config.defaultEmbedProvider ?? null,
           model: config.defaultEmbedModel ?? null,
+        },
+        image: {
+          provider: config.defaultImageProvider ?? null,
+          model: config.defaultImageModel ?? null,
         },
       },
       availableModels: {

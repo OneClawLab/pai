@@ -43,10 +43,13 @@ pai/
 │   ├── commands/                 ← CLI subcommands (thin wrappers)
 │   │   ├── chat.ts
 │   │   ├── embed.ts
+│   │   ├── image.ts
 │   │   └── model.ts
 │   ├── session-manager.ts        ← CLI layer only
 │   ├── input-resolver.ts         ← CLI layer only
 │   ├── output-formatter.ts       ← CLI layer only
+│   ├── image-client.ts           ← Image generation HTTP client
+│   ├── image-model-resolver.ts   ← Image provider/model resolution
 │   ├── index.ts                  ← LIB entry: export lib/ public API
 │   ├── cli.ts                    ← CLI entry: argv parsing + dispatch
 │   └── help.ts
@@ -143,6 +146,36 @@ pai chat [prompt] [--model <name>] [flags...]
 1. No stdin: use CLI args or session file only.
 2. stdin + `prompt`: stdin as additional context.
 3. stdin + no `prompt`: stdin as user input.
+
+### 5.3 `pai image`
+
+Generate images from text prompts. Calls OpenAI / Azure OpenAI image generation REST API directly (pi-ai does not support image generation).
+
+```
+pai image [prompt] [--model <name>] [flags...]
+```
+
+**Core Args**:
+- `--model <name>` — image model (e.g. `gpt-image-1`); falls back to `defaultImageModel`
+- `--provider <name>` — provider name; falls back to `defaultImageProvider`, then `defaultProvider`
+- `--size <WxH>` — `1024x1024` (default), `1024x1536`, `1536x1024`, `auto`
+- `--quality <level>` — `low`, `medium`, `high` (default), `auto`
+- `-n <number>` — number of images, 1-10 (default: 1)
+- `--output <path>` — save to file (omit for base64 to stdout)
+- `--output-format <fmt>` — `png` (default), `jpeg`, `webp`
+- `--background <type>` — `auto` (default), `transparent` (PNG only)
+- `--input-file <path>` — read prompt from file
+- `--json` — JSON output
+- `--quiet` — suppress progress
+
+**Provider support**: OpenAI (`/v1/images/generations`) and Azure OpenAI (`/openai/deployments/{deployment}/images/generations`). Azure uses `api-key` header; OpenAI uses `Authorization: Bearer`.
+
+**Output behavior**:
+- With `--output`: decode base64, write file(s), stdout outputs file path(s)
+- Without `--output`: stdout outputs raw base64 (one line per image)
+- `--json` mode: structured JSON with base64/path + revised_prompt + created
+
+**Config fields**: `defaultImageProvider`, `defaultImageModel` in PAIConfig.
 
 ## 6. Input Priority & Override Rules
 
@@ -280,6 +313,9 @@ export { chat } from './lib/chat.js'
 // Tools
 export { createBashExecTool } from './tools/bash-exec.js'
 
+// Image generation
+export { ImageClient } from './image-client.js'
+
 // Configuration loading
 export { loadConfig, resolveProvider } from './lib/config.js'
 
@@ -296,6 +332,12 @@ export type {
   Tool,
   Usage,
 } from './lib/types.js'
+export type {
+  ImageClientConfig,
+  ImageGenerationRequest,
+  ImageGenerationResponse,
+  GeneratedImage,
+} from './image-client.js'
 ```
 
 ### 12.2 `chat()` Function

@@ -727,6 +727,79 @@ JSON mode (`--json`) — batch:
 
 **Text truncation:** If input text exceeds the model's token limit, it is automatically truncated with a warning on stderr.
 
+### `pai image`
+
+Generate images from text prompts using OpenAI or Azure OpenAI image generation models (e.g. `gpt-image-1`).
+
+**Options:**
+- `--provider <name>` - Provider name
+- `--model <name>` - Image model name (e.g. `gpt-image-1`)
+- `--config <path>` - Config file path
+- `--size <WxH>` - Image size: `1024x1024` (default), `1024x1536`, `1536x1024`, `auto`
+- `--quality <level>` - Quality: `low`, `medium`, `high` (default), `auto`
+- `-n <number>` - Number of images to generate, 1-10 (default: 1)
+- `--output <path>` - Output file path (omit for base64 to stdout)
+- `--output-format <fmt>` - Output format: `png` (default), `jpeg`, `webp`
+- `--background <type>` - Background: `auto` (default), `transparent` (PNG only)
+- `--input-file <path>` - Read prompt from file
+- `--json` - Output as JSON
+- `--quiet` - Suppress progress output
+
+**Input sources** (mutually exclusive — use only one):
+1. Positional argument: `pai image "a cat wearing a top hat"`
+2. stdin: `echo "a futuristic city" | pai image`
+3. File: `pai image --input-file prompt.txt`
+
+**Examples:**
+
+```bash
+# Basic image generation, save to file
+pai image "a cat wearing a top hat" --provider my-azure --model gpt-image-1 --output cat.png
+
+# High quality wide image
+pai image "sunset over mountains" --size 1536x1024 --quality high --output sunset.png
+
+# From stdin
+echo "a futuristic city" | pai image --provider my-azure --model gpt-image-1 --output city.png
+
+# Generate multiple images
+pai image "abstract art" -n 3 --output art.png
+# Saves: art_1.png, art_2.png, art_3.png
+
+# JSON output (includes base64 and revised_prompt)
+pai image "logo design" --json --output logo.png
+
+# Transparent background (PNG only)
+pai image "icon of a rocket" --background transparent --output rocket.png
+
+# Pipe base64 output (no --output)
+pai image "logo design" | base64 -d > logo.png
+
+# Using default image provider/model (after configuring)
+pai model default --image-provider my-azure --image-model gpt-image-1
+pai image "a cat" --output cat.png
+```
+
+**Output behavior:**
+
+With `--output <path>`:
+- Single image: writes to the exact path
+- Multiple images (`-n > 1`): appends `_1`, `_2`, ... before the extension (e.g. `art_1.png`, `art_2.png`)
+- stdout outputs the file path(s), one per line
+
+Without `--output`:
+- stdout outputs base64-encoded image data, one per line (one line per image)
+
+JSON mode (`--json`) with `--output`:
+```json
+{"images":[{"path":"cat.png","revisedPrompt":"a cute cat wearing a top hat"}],"created":1698435368}
+```
+
+JSON mode (`--json`) without `--output`:
+```json
+{"images":[{"b64_json":"...","revised_prompt":"a cute cat wearing a top hat"}],"created":1698435368}
+```
+
 ### `pai model list`
 
 List providers and models.
@@ -768,10 +841,10 @@ pai model config --update --name openai --set defaultModel=gpt-4o --default
 
 ### `pai model default`
 
-View or set the default provider and embedding model. When no options are given, shows the current defaults. When `--name` is provided, sets that provider as the default chat provider.
+View or set the default provider, embedding model, and image model. When no options are given, shows the current defaults. When `--name` is provided, sets that provider as the default chat provider.
 
 ```bash
-# View current defaults (provider + embed)
+# View current defaults (provider + embed + image)
 pai model default
 
 # Set default provider
@@ -780,8 +853,13 @@ pai model default --name openai
 # Set default embedding provider and model
 pai model default --embed-provider openai --embed-model text-embedding-3-small
 
-# Set both at once
-pai model default --name openai --embed-provider openai --embed-model text-embedding-3-small
+# Set default image provider and model
+pai model default --image-provider my-azure --image-model gpt-image-1
+
+# Set all at once
+pai model default --name openai \
+  --embed-provider openai --embed-model text-embedding-3-small \
+  --image-provider my-azure --image-model gpt-image-1
 
 # Output as JSON
 pai model default --json
@@ -791,6 +869,8 @@ pai model default --json
 - `--name <name>` - Provider name to set as default (must already be configured)
 - `--embed-provider <name>` - Set default embedding provider
 - `--embed-model <model>` - Set default embedding model
+- `--image-provider <name>` - Set default image provider
+- `--image-model <model>` - Set default image model
 - `--json` - Output as JSON
 - `--config <path>` - Config file path
 
@@ -863,6 +943,8 @@ Default location: `~/.config/pai/default.json`
   "defaultProvider": "openai",
   "defaultEmbedProvider": "openai",
   "defaultEmbedModel": "text-embedding-3-small",
+  "defaultImageProvider": "my-azure",
+  "defaultImageModel": "gpt-image-1",
   "providers": [
     {
       "name": "openai",

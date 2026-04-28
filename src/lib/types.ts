@@ -42,6 +42,8 @@ export interface PAIConfig {
   defaultProvider?: string;
   defaultEmbedProvider?: string;
   defaultEmbedModel?: string;
+  defaultImageProvider?: string;
+  defaultImageModel?: string;
   providers: ProviderConfig[];
 }
 
@@ -162,6 +164,18 @@ export interface ChatOptions extends CLIOptions {
   maxTurns?: number; // Max tool-call turns
 }
 
+export interface ImageOptions extends CLIOptions {
+  provider?: string;
+  model?: string;
+  size?: string;
+  quality?: string;
+  n?: number;
+  output?: string;
+  outputFormat?: string;
+  background?: string;
+  inputFile?: string;
+}
+
 export interface ModelConfigOptions extends CLIOptions {
   add?: boolean;
   update?: boolean;
@@ -174,6 +188,8 @@ export interface ModelConfigOptions extends CLIOptions {
   default?: boolean;
   embedProvider?: string;
   embedModel?: string;
+  imageProvider?: string;
+  imageModel?: string;
 }
 
 // ============================================================================

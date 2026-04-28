@@ -11,6 +11,11 @@ describe('src/index.ts - LIB exports', () => {
     expect(typeof createBashExecTool).toBe('function')
   })
 
+  it('should export ImageClient as a class', async () => {
+    const { ImageClient } = await import('../../src/index.js')
+    expect(typeof ImageClient).toBe('function')
+  })
+
   it('should NOT export chat, loadConfig, resolveProvider (now internal)', async () => {
     const module = await import('../../src/index.js') as Record<string, unknown>
     expect(module['chat']).toBeUndefined()

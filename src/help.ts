@@ -58,6 +58,22 @@ JSON output (--json):
   单条: {"embedding":[...],"model":"...","usage":{...}}
   批量: {"embeddings":[[...],[...]],"model":"...","usage":{...}}`;
 
+const IMAGE_EXAMPLES = `
+Examples:
+  $ pai image "a cat wearing a top hat" --output cat.png
+  $ pai image "sunset over mountains" --size 1536x1024 --quality high --output sunset.png
+  $ echo "a futuristic city" | pai image --output city.png
+  $ pai image "abstract art" -n 3 --output art.png
+  $ pai image "icon of a rocket" --background transparent --output rocket.png
+  $ pai image "logo design" --json                    # JSON 输出（含 base64）
+
+Stdin:
+  支持通过管道传入 prompt。与位置参数和 --input-file 互斥。
+
+Output:
+  --output <path>: 保存到文件（多张图片自动加 _1, _2 后缀）
+  无 --output: stdout 输出 base64 字符串（每张一行）`;
+
 const MODEL_LIST_EXAMPLES = `
 Examples:
   $ pai model list                                    # 已配置 provider
@@ -78,7 +94,8 @@ const MODEL_DEFAULT_EXAMPLES = `
 Examples:
   $ pai model default                                 # 查看当前默认
   $ pai model default --name openai                   # 设置默认 provider
-  $ pai model default --embed-provider openai --embed-model text-embedding-3-small`;
+  $ pai model default --embed-provider openai --embed-model text-embedding-3-small
+  $ pai model default --image-provider my-azure --image-model gpt-image-1`;
 
 const MODEL_LOGIN_EXAMPLES = `
 Examples:
@@ -113,6 +130,7 @@ export function addSubcommandExamples(cmd: Command, name: string): void {
   const examples: Record<string, string> = {
     'chat': CHAT_EXAMPLES,
     'embed': EMBED_EXAMPLES,
+    'image': IMAGE_EXAMPLES,
     'list': MODEL_LIST_EXAMPLES,
     'config': MODEL_CONFIG_EXAMPLES,
     'default': MODEL_DEFAULT_EXAMPLES,
