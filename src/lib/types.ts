@@ -273,6 +273,8 @@ export interface ChatConfig {
   api?: string | null;
   baseUrl?: string | null;
   reasoning?: boolean | null;
+  /** Input modalities: ['text'] or ['text', 'image'] */
+  input?: string[] | null;
   contextWindow?: number | null;
   providerOptions?: Record<string, unknown> | null;
 }

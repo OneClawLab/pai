@@ -43,6 +43,7 @@ export async function* chat(
     ...(config.api !== null && config.api !== undefined && { api: config.api }),
     ...(config.baseUrl !== null && config.baseUrl !== undefined && { baseUrl: config.baseUrl }),
     ...(config.reasoning !== null && config.reasoning !== undefined && { reasoning: config.reasoning }),
+    ...(config.input !== null && config.input !== undefined && { input: config.input }),
     ...(config.contextWindow !== null && config.contextWindow !== undefined && { contextWindow: config.contextWindow }),
     ...(config.providerOptions !== null && config.providerOptions !== undefined && { providerOptions: config.providerOptions }),
   });

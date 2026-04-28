@@ -208,6 +208,7 @@ export async function handleChatCommand(
       ...(provider.api !== undefined && { api: provider.api }),
       ...(provider.baseUrl !== undefined && { baseUrl: provider.baseUrl }),
       ...(provider.reasoning !== undefined && { reasoning: provider.reasoning }),
+      ...(provider.input !== undefined && { input: provider.input }),
       ...(resolved.contextWindow !== undefined && { contextWindow: resolved.contextWindow }),
       ...(provider.providerOptions !== undefined && { providerOptions: provider.providerOptions }),
     };

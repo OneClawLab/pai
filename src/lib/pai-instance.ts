@@ -87,6 +87,7 @@ export async function initPai(configPath?: string): Promise<Pai> {
         ...(provider.api !== undefined && { api: provider.api }),
         ...(provider.baseUrl !== undefined && { baseUrl: provider.baseUrl }),
         ...(provider.reasoning !== undefined && { reasoning: provider.reasoning }),
+        ...(provider.input !== undefined && { input: provider.input }),
         ...(provider.contextWindow !== undefined && { contextWindow: provider.contextWindow }),
         ...(provider.providerOptions !== undefined && { providerOptions: provider.providerOptions }),
       }

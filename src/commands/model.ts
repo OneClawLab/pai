@@ -7,6 +7,28 @@ import { ConfigurationManager } from '../config-manager.js';
 import { resolveModel, getRegistryModels, validateModelId } from '../model-resolver.js';
 
 /**
+ * Coerce a --set value string to its appropriate JS type.
+ * Tries JSON.parse for values that look like JSON (arrays, objects, booleans, numbers).
+ * Falls back to the raw string for everything else (including API keys, URLs, etc.).
+ */
+function coerceSetValue(value: string): unknown {
+  // Try JSON parse for values that look like JSON structures
+  if (
+    (value.startsWith('[') && value.endsWith(']')) ||
+    (value.startsWith('{') && value.endsWith('}')) ||
+    value === 'true' || value === 'false' || value === 'null' ||
+    /^-?\d+(\.\d+)?$/.test(value)
+  ) {
+    try {
+      return JSON.parse(value);
+    } catch {
+      // Not valid JSON, return as string
+    }
+  }
+  return value;
+}
+
+/**
  * Handle model list command
  */
 export async function handleModelList(options: ModelConfigOptions): Promise<void> {
@@ -236,9 +258,9 @@ export async function handleModelConfig(options: ModelConfigOptions): Promise<vo
               }
               target = target[part];
             }
-            target[parts[parts.length - 1]!] = value;
+            target[parts[parts.length - 1]!] = coerceSetValue(value);
           } else {
-            providerConfig[key] = value;
+            providerConfig[key] = coerceSetValue(value);
           }
         }
       }
@@ -301,9 +323,9 @@ export async function handleModelConfig(options: ModelConfigOptions): Promise<vo
             }
             target = target[part];
           }
-          target[parts[parts.length - 1]!] = value;
+          target[parts[parts.length - 1]!] = coerceSetValue(value);
         } else {
-          updates[key] = value;
+          updates[key] = coerceSetValue(value);
         }
       }
 
