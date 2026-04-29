@@ -183,6 +183,14 @@ export async function handleImageCommand(
     // Determine mode: edit (--image provided) or generate
     const isEditMode = options.image && options.image.length > 0;
 
+    // Dashscope adapter currently only supports text->image (文生图).
+    if (providerName === 'dashscope' && isEditMode) {
+      throw new PAIError(
+        'Dashscope provider (qwen-image-2.0-pro) currently supports text->image generation only; edit mode with local images is not supported. Provide image URLs or use another provider.',
+        ExitCode.ARGUMENT_ERROR,
+      );
+    }
+
     let response: import('../image-client.js').ImageGenerationResponse;
 
     if (isEditMode) {

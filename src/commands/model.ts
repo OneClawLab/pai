@@ -47,6 +47,8 @@ export async function handleModelList(options: ModelConfigOptions): Promise<void
     if (options.all) {
       // List all supported providers
       const allProviders = getProviders();
+      // Add custom local provider 'dashscope' for Dashscope (阿里百炼) support
+      if (!allProviders.includes('dashscope')) allProviders.push('dashscope');
       
       if (options.json) {
         const output = {
@@ -206,6 +208,8 @@ export async function handleModelConfig(options: ModelConfigOptions): Promise<vo
 
       // Validate provider is supported
       const supportedProviders = getProviders();
+      // Accept 'dashscope' as a supported provider type (custom adapter)
+      if (!supportedProviders.includes('dashscope')) supportedProviders.push('dashscope');
       if (!supportedProviders.includes(options.provider as any)) {
         throw new PAIError(
           `Unsupported provider: ${options.provider}`,

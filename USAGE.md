@@ -310,6 +310,40 @@ pai model config --add --name huggingface --provider huggingface \
 
 Environment variable alternative: `HF_TOKEN`
 
+#### Dashscope（阿里百炼 / qwen-image-2.0-pro）
+
+Dashscope 提供百炼/阿里云的 AIGC 接口，可用于调用 `qwen-image-2.0-pro` 模型进行图生（text->image）生成。
+
+示例：通过 API Key 配置一个名为 `dashscope` 的 provider，并设置默认图片模型为 `qwen-image-2.0-pro`：
+
+```bash
+pai model config --add --name dashscope --provider dashscope \
+  --set apiKey=$DASHSCOPE_API_KEY \
+  --set defaultImageModel=qwen-image-2.0-pro
+```
+
+运行时可以通过环境变量 `DASHSCOPE_API_KEY` 提供密钥（该 CLI 也会从配置文件读取）。
+
+示例配置片段（`~/.config/pai/default.json`）：
+
+```json
+{
+  "schema_version": "1.0.0",
+  "providers": [
+    {
+      "name": "dashscope",
+      "provider": "dashscope",
+      "apiKey": "<your-dashscope-api-key>",
+      "defaultImageModel": "qwen-image-2.0-pro",
+      "baseUrl": "https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation"
+    }
+  ]
+}
+```
+
+注意：当前 `dashscope` 适配器在 `pai image` 中只支持文本生图（text->image），不自动上传本地图片；如需编辑/替换本地图片请先上传到可访问的 URL 或使用支持 edit 模式的 provider。
+
+
 #### MiniMax / MiniMax CN
 
 ```bash

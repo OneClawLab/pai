@@ -53,6 +53,7 @@ export interface ImageGenerationResponse {
 
 const PROVIDER_DEFAULT_BASE_URLS: Record<string, string> = {
   openai: 'https://api.openai.com',
+  dashscope: 'https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation',
 };
 
 // ---------------------------------------------------------------------------
@@ -123,6 +124,13 @@ export class ImageClient {
    * Call the image generation API.
    */
   async generate(request: ImageGenerationRequest): Promise<ImageGenerationResponse> {
+    // Special-case Dashscope (aliyun dashscope / 百炼) provider which uses
+    // a different endpoint and request/response shape.
+    if (this.config.provider === 'dashscope') {
+      const { dashscopeGenerate } = await import('./image-adapters/dashscope.js');
+      return await dashscopeGenerate(this.config, request);
+    }
+
     const body: Record<string, unknown> = {
       prompt: request.prompt,
     };
