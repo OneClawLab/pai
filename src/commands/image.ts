@@ -12,8 +12,32 @@ import { resolveImageModel } from '../image-model-resolver.js';
 // Validation constants
 // ---------------------------------------------------------------------------
 
-const VALID_SIZES = new Set(['1024x1024', '1024x1536', '1536x1024', 'auto']);
+const PRESET_SIZES = new Set(['1024x1024', '1024x1536', '1536x1024', 'auto']);
 const VALID_QUALITIES = new Set(['low', 'medium', 'high', 'auto']);
+
+// gpt-image-2 constraints for custom sizes
+const MAX_EDGE = 3840;
+const MIN_PIXELS = 655_360;
+const MAX_PIXELS = 8_294_400;
+const MAX_ASPECT_RATIO = 3;
+const EDGE_MULTIPLE = 16;
+
+function validateSize(size: string): string | null {
+  if (PRESET_SIZES.has(size)) return null;
+  const match = size.match(/^(\d+)x(\d+)$/);
+  if (!match) return `Invalid size format: ${size}. Use WxH (e.g. 3840x2160) or one of: ${[...PRESET_SIZES].join(', ')}`;
+  const w = Number(match[1]);
+  const h = Number(match[2]);
+  if (w % EDGE_MULTIPLE !== 0 || h % EDGE_MULTIPLE !== 0) return `Both dimensions must be multiples of ${EDGE_MULTIPLE}. Got ${w}x${h}`;
+  if (w > MAX_EDGE || h > MAX_EDGE) return `Each dimension must be <= ${MAX_EDGE}px. Got ${w}x${h}`;
+  if (w < EDGE_MULTIPLE || h < EDGE_MULTIPLE) return `Each dimension must be >= ${EDGE_MULTIPLE}px. Got ${w}x${h}`;
+  const pixels = w * h;
+  if (pixels < MIN_PIXELS) return `Total pixels (${pixels}) below minimum ${MIN_PIXELS}. Got ${w}x${h}`;
+  if (pixels > MAX_PIXELS) return `Total pixels (${pixels}) exceeds maximum ${MAX_PIXELS}. Got ${w}x${h}`;
+  const ratio = Math.max(w, h) / Math.min(w, h);
+  if (ratio > MAX_ASPECT_RATIO) return `Aspect ratio ${ratio.toFixed(1)}:1 exceeds maximum ${MAX_ASPECT_RATIO}:1. Got ${w}x${h}`;
+  return null;
+}
 const VALID_OUTPUT_FORMATS = new Set(['png', 'jpeg', 'webp']);
 const VALID_BACKGROUNDS = new Set(['auto', 'transparent']);
 const MAX_N = 10;
@@ -95,11 +119,9 @@ export async function handleImageCommand(
 
     // Validate options
     const size = options.size ?? '1024x1024';
-    if (!VALID_SIZES.has(size)) {
-      throw new PAIError(
-        `Invalid size: ${size}. Valid sizes: ${[...VALID_SIZES].join(', ')}`,
-        ExitCode.ARGUMENT_ERROR,
-      );
+    const sizeError = validateSize(size);
+    if (sizeError) {
+      throw new PAIError(sizeError, ExitCode.ARGUMENT_ERROR);
     }
 
     const quality = options.quality ?? 'high';
