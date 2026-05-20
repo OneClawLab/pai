@@ -2,6 +2,12 @@ import { execSync, spawn } from 'node:child_process';
 import { platform } from 'node:os';
 import type { Tool, BashExecArgs, BashExecResult } from '../types.js';
 
+/**
+ * Callback invoked on each stdout/stderr chunk during bash_exec execution.
+ * Enables real-time output monitoring without waiting for command completion.
+ */
+export type BashExecOutputCallback = (stream: 'stdout' | 'stderr', chunk: string) => void;
+
 // MAX LENGTH in MB that bash_exec tool can output to LLM
 const BASH_EXEC_TOOL_MAX_OUTPUT_MB = 8;
 // Per-invocation timeout bounds (seconds)
@@ -113,7 +119,7 @@ For complex logic, prioritize a human-readable multi-line format using line brea
  * A per-invocation AbortController combines the invocation timeout with the
  * session-level signal so either source can trigger cleanup.
  */
-export function createBashExecTool(extraEnv?: Record<string, string>): Tool {
+export function createBashExecTool(extraEnv?: Record<string, string>, onOutput?: BashExecOutputCallback): Tool {
   const shell = detectShell();
 
   return {
@@ -193,10 +199,12 @@ export function createBashExecTool(extraEnv?: Record<string, string>): Tool {
         proc.stdout!.on('data', (chunk: Buffer) => {
           stdoutLen += chunk.length;
           if (stdoutLen <= maxBytes) stdoutChunks.push(chunk);
+          if (onOutput) onOutput('stdout', chunk.toString('utf-8'));
         });
         proc.stderr!.on('data', (chunk: Buffer) => {
           stderrLen += chunk.length;
           if (stderrLen <= maxBytes) stderrChunks.push(chunk);
+          if (onOutput) onOutput('stderr', chunk.toString('utf-8'));
         });
 
         const onAbort = (): void => {

@@ -293,6 +293,7 @@ export type ChatEvent =
   | { type: 'thinking_delta'; delta: string }
   | { type: 'thinking_end'; thinking: string }
   | { type: 'tool_call'; callId: string; name: string; args: unknown }
+  | { type: 'tool_output'; callId: string; name: string; stream: 'stdout' | 'stderr'; chunk: string }
   | { type: 'tool_result'; callId: string; name: string; result: unknown }
   | { type: 'complete'; finishReason: string; usage?: Usage }
   | { type: 'chat_end'; newMessages: Message[] };
