@@ -58,9 +58,10 @@ export class LLMClient {
   /**
    * Chat with streaming responses
    */
-  async *chat(messages: Message[], tools?: Tool[]): AsyncGenerator<LLMResponse> {
+  async *chat(messages: Message[], tools?: Tool[], signal?: AbortSignal): AsyncGenerator<LLMResponse> {
     const context = this.buildContext(messages, tools);
     const options = this.buildOptions();
+    if (signal) options.signal = signal;
 
     const streamResult = stream(this.model, context, options);
 
@@ -114,9 +115,10 @@ export class LLMClient {
   /**
    * Chat without streaming (complete response)
    */
-  async chatComplete(messages: Message[], tools?: Tool[]): Promise<LLMResponse> {
+  async chatComplete(messages: Message[], tools?: Tool[], signal?: AbortSignal): Promise<LLMResponse> {
     const context = this.buildContext(messages, tools);
     const options = this.buildOptions();
+    if (signal) options.signal = signal;
 
     const result = await complete(this.model, context, options);
 

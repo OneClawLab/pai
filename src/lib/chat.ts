@@ -81,7 +81,7 @@ export async function* chat(
         // Streaming mode
         let fullContent = '';
 
-        for await (const response of llmClient.chat(messages, tools)) {
+        for await (const response of llmClient.chat(messages, tools, signal)) {
           if (response.finishReason === 'streaming') {
             // Streaming chunk
             if (response.content && chunkWriter !== null) {
@@ -104,7 +104,7 @@ export async function* chat(
         assistantMessage = streamMsg;
       } else {
         // Non-streaming mode
-        const response = await llmClient.chatComplete(messages, tools);
+        const response = await llmClient.chatComplete(messages, tools, signal);
         finishReason = response.finishReason;
         usage = response.usage;
 
