@@ -11,6 +11,12 @@ describe('src/index.ts - LIB exports', () => {
     expect(typeof createBashExecTool).toBe('function')
   })
 
+  it('should export BASH_EXEC_TOOL_DESC as a string', async () => {
+    const { BASH_EXEC_TOOL_DESC } = await import('../../src/index.js')
+    expect(typeof BASH_EXEC_TOOL_DESC).toBe('string')
+    expect(BASH_EXEC_TOOL_DESC.length).toBeGreaterThan(0)
+  })
+
   it('should export ImageClient as a class', async () => {
     const { ImageClient } = await import('../../src/index.js')
     expect(typeof ImageClient).toBe('function')

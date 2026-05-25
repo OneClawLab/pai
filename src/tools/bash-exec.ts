@@ -2,6 +2,15 @@ import { execSync, spawn } from 'node:child_process';
 import { platform } from 'node:os';
 import type { Tool, BashExecArgs, BashExecResult } from '../types.js';
 
+export interface BashExecToolOptions {
+  /** Extra environment variables to inject into the spawned shell */
+  extraEnv?: Record<string, string>
+  /** Callback invoked on each stdout/stderr chunk during execution */
+  onOutput?: BashExecOutputCallback
+  /** Override the default tool description sent to the LLM */
+  description?: string
+}
+
 /**
  * Callback invoked on each stdout/stderr chunk during bash_exec execution.
  * Enables real-time output monitoring without waiting for command completion.
@@ -74,7 +83,7 @@ function killTree(pid: number): void {
   }
 }
 
-const BASH_EXEC_TOOL_DESC = `
+export const BASH_EXEC_TOOL_DESC = `
 Execute a shell command on bash and return stdout, stderr, and exitCode.
 Supports full bash syntax: pipes, redirections, xargs, heredocs, shell scripts.
 Use cwd parameter to set working directory.
@@ -119,12 +128,13 @@ For complex logic, prioritize a human-readable multi-line format using line brea
  * A per-invocation AbortController combines the invocation timeout with the
  * session-level signal so either source can trigger cleanup.
  */
-export function createBashExecTool(extraEnv?: Record<string, string>, onOutput?: BashExecOutputCallback): Tool {
+export function createBashExecTool(options?: BashExecToolOptions): Tool {
+  const { extraEnv, onOutput, description = BASH_EXEC_TOOL_DESC } = options ?? {};
   const shell = detectShell();
 
   return {
     name: 'bash_exec',
-    description: BASH_EXEC_TOOL_DESC,
+    description,
     parameters: {
       type: 'object',
       properties: {

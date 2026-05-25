@@ -297,14 +297,14 @@ describe('bash_exec tool', () => {
 
   describe('extraEnv injection', () => {
     it('should inject extraEnv variables into the subprocess', async () => {
-      const t = createBashExecTool({ TEST_VAR: 'hello' });
+      const t = createBashExecTool({ extraEnv: { TEST_VAR: 'hello' } });
       const result = await t.handler({ command: 'echo $TEST_VAR' });
       expect(result.exitCode).toBe(0);
       expect(result.stdout).toContain('hello');
     });
 
     it('should merge extraEnv with existing process.env', async () => {
-      const t = createBashExecTool({ EXTRA_KEY: 'extra_value' });
+      const t = createBashExecTool({ extraEnv: { EXTRA_KEY: 'extra_value' } });
       // PATH should still be available from process.env
       const result = await t.handler({ command: 'echo $EXTRA_KEY && echo $PATH' });
       expect(result.exitCode).toBe(0);

@@ -1,5 +1,5 @@
-export { createBashExecTool } from './tools/bash-exec.js';
-export type { BashExecOutputCallback } from './tools/bash-exec.js';
+export { createBashExecTool, BASH_EXEC_TOOL_DESC } from './tools/bash-exec.js';
+export type { BashExecOutputCallback, BashExecToolOptions } from './tools/bash-exec.js';
 export { initPai } from './lib/pai-instance.js';
 export { defineTool } from './lib/types.js';
 export { ImageClient } from './image-client.js';
