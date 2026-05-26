@@ -21,26 +21,17 @@ export interface FileWriteResult {
 }
 
 const FILE_WRITE_TOOL_DESC = `
-Write or append text content to a file. Use this instead of bash heredoc for all file writing.
+Write or append text to a file. Prefer this over bash heredoc — no shell escaping needed.
 
-Advantages over heredoc:
-- Content is passed as a plain string — no shell escaping needed
-- Safe for markdown, source code, JSON, and any content with special characters
-- Built-in verification: returns line count and tail after every write
+- path: file path. Use absolute path, or relative + cwd together.
+- cwd: required when path is relative. Must be an absolute path.
+- mode: "write" (overwrite/create) or "append".
+- content: exact text to write. No escaping needed.
+- comment: brief note for audit trail.
 
-## Parameters
-- path: File path. Relative paths are resolved against cwd (if provided) or process.cwd().
-- content: The text content to write. No escaping needed — write exactly what you want in the file.
-- mode: "write" (default) overwrites the file; "append" adds to the end.
-- cwd: Working directory for resolving relative paths. Set this to the project root.
-- encoding: File encoding. Default: "utf-8".
-- comment: Brief note on what and why (for audit trail).
+Returns totalLines, tail, and tailMode after every write — no separate verification needed.
 
-## Splitting large files
-When content exceeds ~150 lines, split into chunks:
-1. First chunk: mode="write"
-2. Subsequent chunks: mode="append"
-The returned totalLines and tail3 confirm each chunk landed correctly.
+For files >150 lines, split into chunks: first chunk mode="write", rest mode="append".
 `.trim()
 
 /**
@@ -81,10 +72,15 @@ export function createFileWriteTool(): Tool {
           description: 'Brief note on what is being written and why.',
         },
       },
-      required: ['path', 'content', 'comment'],
+      required: ['path', 'mode', 'content', 'comment'],
     },
     handler: async (args: FileWriteArgs): Promise<FileWriteResult> => {
       const mode = args.mode ?? 'write'
+
+      if (!isAbsolute(args.path) && !args.cwd) {
+        throw new Error('cwd is required when path is relative. Provide an absolute cwd or use an absolute path.')
+      }
+
       const base = args.cwd
         ? (isAbsolute(args.cwd) ? args.cwd : resolve(process.cwd(), args.cwd))
         : process.cwd()
