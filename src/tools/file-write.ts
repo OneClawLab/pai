@@ -16,7 +16,8 @@ export interface FileWriteResult {
   mode: 'write' | 'append'
   bytesWritten: number
   totalLines: number
-  tail3: string
+  tail: string
+  tailMode: 'last3lines' | 'last50chars'
 }
 
 const FILE_WRITE_TOOL_DESC = `
@@ -115,16 +116,24 @@ export function createFileWriteTool(): Tool {
         ? lines.length - 1
         : lines.length
 
-      const tail3 = lines
-        .slice(Math.max(0, lines.length - (lines[lines.length - 1] === '' ? 4 : 3)), lines.length - (lines[lines.length - 1] === '' ? 1 : 0))
+      // Tail: take whichever is smaller — last 3 lines or last 50 chars
+      const trimmed = written.endsWith('\n') ? written.slice(0, -1) : written
+      const last3Lines = lines
+        .slice(Math.max(0, lines.length - (written.endsWith('\n') ? 4 : 3)),
+               written.endsWith('\n') ? lines.length - 1 : lines.length)
         .join('\n')
+      const last50Chars = trimmed.slice(-50)
+      const useLast3 = last3Lines.length <= last50Chars.length
+      const tail = useLast3 ? last3Lines : last50Chars
+      const tailMode = useLast3 ? 'last3lines' : 'last50chars'
 
       return {
         path: filePath,
         mode,
         bytesWritten: buf.byteLength,
         totalLines,
-        tail3,
+        tail,
+        tailMode,
       }
     },
   }

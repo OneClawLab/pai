@@ -216,7 +216,8 @@ export interface FileWriteResult {
   mode: 'write' | 'append';
   bytesWritten: number;
   totalLines: number;
-  tail3: string;
+  tail: string;
+  tailMode: 'last3lines' | 'last50chars';
 }
 
 // ============================================================================
