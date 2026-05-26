@@ -309,4 +309,18 @@ export interface ChatHooks {
    * Injected messages are appended to the conversation and included in newMessages.
    */
   onBeforeNextTurn?: (messages: readonly Message[]) => Promise<Message[]>
+
+  /**
+   * Called immediately before each LLM HTTP call (including the very first one).
+   * Receives the full messages array about to be sent and may return a transformed
+   * copy. Use this for context-window management: truncating large tool results,
+   * dropping stale messages, etc.
+   *
+   * The returned array replaces the messages sent to the LLM for this call only —
+   * the internal messages array (used for newMessages tracking and subsequent turns)
+   * is NOT mutated. This keeps the hook side-effect-free with respect to the loop.
+   *
+   * Return the same array (or a copy with no changes) to leave messages unchanged.
+   */
+  transformMessagesBeforeCall?: (messages: readonly Message[]) => Message[]
 }

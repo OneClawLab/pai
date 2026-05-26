@@ -63,12 +63,19 @@ export async function* chat(
         throw new PAIError('Chat aborted by signal', ExitCode.RUNTIME_ERROR);
       }
 
+      // Apply caller-supplied message transform (e.g. tool result truncation)
+      // before sending to the LLM. The internal messages array is not mutated —
+      // only the slice sent to this HTTP call is affected.
+      const messagesForCall = hooks?.transformMessagesBeforeCall
+        ? hooks.transformMessagesBeforeCall(messages)
+        : messages;
+
       // Yield start event
       yield {
         type: 'start',
         provider: config.provider,
         model: config.model,
-        messageCount: messages.length,
+        messageCount: messagesForCall.length,
         toolCount: tools.length,
       };
 
@@ -81,7 +88,7 @@ export async function* chat(
         // Streaming mode
         let fullContent = '';
 
-        for await (const response of llmClient.chat(messages, tools, signal)) {
+        for await (const response of llmClient.chat(messagesForCall, tools, signal)) {
           if (response.finishReason === 'streaming') {
             // Streaming chunk
             if (response.content && chunkWriter !== null) {
@@ -104,7 +111,7 @@ export async function* chat(
         assistantMessage = streamMsg;
       } else {
         // Non-streaming mode
-        const response = await llmClient.chatComplete(messages, tools, signal);
+        const response = await llmClient.chatComplete(messagesForCall, tools, signal);
         finishReason = response.finishReason;
         usage = response.usage;
 
