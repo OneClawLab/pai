@@ -5,7 +5,7 @@ import type { Tool } from '../types.js'
 export interface FileWriteArgs {
   path: string
   content: string
-  mode?: 'write' | 'append'
+  mode: 'write' | 'append'
   cwd?: string
   encoding?: 'utf-8'
   comment: string
@@ -56,7 +56,7 @@ export function createFileWriteTool(): Tool {
         mode: {
           type: 'string',
           enum: ['write', 'append'],
-          description: 'Write mode: "write" (overwrite/create) or "append". Default: "write".',
+          description: '"write" to overwrite/create, "append" to add to end.',
         },
         cwd: {
           type: 'string',
@@ -75,7 +75,7 @@ export function createFileWriteTool(): Tool {
       required: ['path', 'mode', 'content', 'comment'],
     },
     handler: async (args: FileWriteArgs): Promise<FileWriteResult> => {
-      const mode = args.mode ?? 'write'
+      const mode = args.mode
 
       if (!isAbsolute(args.path) && !args.cwd) {
         throw new Error('cwd is required when path is relative. Provide an absolute cwd or use an absolute path.')

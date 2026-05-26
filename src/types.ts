@@ -205,7 +205,7 @@ export interface BashExecResult {
 export interface FileWriteArgs {
   path: string;
   content: string;
-  mode?: 'write' | 'append';
+  mode: 'write' | 'append';
   cwd?: string;
   encoding?: 'utf-8';
   comment: string;
