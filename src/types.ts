@@ -199,6 +199,27 @@ export interface BashExecResult {
 }
 
 // ============================================================================
+// file_write Tool Types
+// ============================================================================
+
+export interface FileWriteArgs {
+  path: string;
+  content: string;
+  mode?: 'write' | 'append';
+  cwd?: string;
+  encoding?: 'utf-8';
+  comment: string;
+}
+
+export interface FileWriteResult {
+  path: string;
+  mode: 'write' | 'append';
+  bytesWritten: number;
+  totalLines: number;
+  tail3: string;
+}
+
+// ============================================================================
 // Output Formatter Types
 // ============================================================================
 

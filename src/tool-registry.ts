@@ -1,5 +1,6 @@
 import type { Tool } from './types.js';
 import { createBashExecTool } from './tools/bash-exec.js';
+import { createFileWriteTool } from './tools/file-write.js';
 
 /**
  * Registry for managing tools available to the LLM
@@ -14,6 +15,7 @@ export class ToolRegistry {
 
   private registerBuiltinTools(): void {
     this.register(createBashExecTool());
+    this.register(createFileWriteTool());
   }
 
   register(tool: Tool): void {
