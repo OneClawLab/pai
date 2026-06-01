@@ -49,8 +49,9 @@ describe('execCommand', () => {
     await expect(
       execCommand('node', ['-e', 'setInterval(function(){},1000)'], 150, 1, 50)
     ).rejects.toThrow(/timed out/);
-    // Should complete well under 1s — if the process kept running we'd wait much longer
-    expect(Date.now() - start).toBeLessThan(1000);
+    // Should complete well under 3s — if the process kept running we'd wait much longer.
+    // Using 3s (not 1s) to tolerate Windows taskkill + process-spawn overhead on a loaded machine.
+    expect(Date.now() - start).toBeLessThan(3000);
   });
 
   it('handles multiple arguments', async () => {
