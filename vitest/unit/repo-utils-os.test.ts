@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { commandExists, execCommand, spawnCommand } from '../../src/repo-utils/os.js';
+import { commandExists, execCommand, spawnCommand, execShellSync } from '../../src/repo-utils/os.js';
 import * as fc from 'fast-check';
 
 describe('commandExists', () => {
@@ -148,6 +148,45 @@ describe('spawnCommand', () => {
     expect(stdout).toContain('path');
     expect(stdout).toContain('to');
     expect(stdout).toContain('file');
+  });
+});
+
+describe('execShellSync', () => {
+  it('captures stdout and reports ok on success', () => {
+    const r = execShellSync('echo hello');
+    expect(r.ok).toBe(true);
+    expect(r.exitCode).toBe(0);
+    expect(r.stdout).toContain('hello');
+    expect(r.stderr).toBe('');
+  });
+
+  it('trims trailing whitespace from stdout', () => {
+    const r = execShellSync('echo trimmed');
+    expect(r.stdout).toBe('trimmed');
+  });
+
+  it('never throws on non-zero exit — reports ok:false', () => {
+    const r = execShellSync('exit 3');
+    expect(r.ok).toBe(false);
+    expect(r.exitCode).toBe(3);
+  });
+
+  it('never throws when command not found — reports ok:false', () => {
+    const r = execShellSync('nonexistent-command-xyz-abc-123');
+    expect(r.ok).toBe(false);
+    expect(r.exitCode).not.toBe(0);
+  });
+
+  it('supports shell features (pipes)', () => {
+    const r = execShellSync('printf "a\\nb\\nc\\n" | grep b');
+    expect(r.ok).toBe(true);
+    expect(r.stdout).toContain('b');
+  });
+
+  it('runs in the given cwd', () => {
+    const r = execShellSync('pwd', { cwd: '/' });
+    expect(r.ok).toBe(true);
+    expect(r.stdout.length).toBeGreaterThan(0);
   });
 });
 

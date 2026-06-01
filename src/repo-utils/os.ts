@@ -279,3 +279,51 @@ export async function execShell(
   });
   return { stdout, stderr };
 }
+
+/** Result of a synchronous shell command. Never throws; `ok` reflects exit code 0. */
+export interface ExecShellSyncResult {
+  stdout: string;
+  stderr: string;
+  exitCode: number;
+  ok: boolean;
+}
+
+/**
+ * Execute a full shell command string synchronously and capture its result.
+ *
+ * Unlike {@link execShell}, this NEVER throws — failures (non-zero exit, timeout,
+ * spawn error) are reported via `ok: false` and the captured `stderr`/`exitCode`.
+ * This suits "fail-open" callers (disk probing, git stat) and sandboxed `code`-type
+ * execution that must run synchronously and inspect the result.
+ *
+ * Uses /bin/sh on Unix, the default shell on Windows. Supports shell features
+ * (pipes, redirection, glob). stdout/stderr are trimmed of trailing whitespace.
+ *
+ * @param command   - The shell command string to run.
+ * @param options   - cwd: working directory; timeoutMs: timeout (default 30000);
+ *                    maxBufferMB: max stdout/stderr buffer in MB (default 1).
+ */
+export function execShellSync(
+  command: string,
+  options?: { cwd?: string; timeoutMs?: number; maxBufferMB?: number },
+): ExecShellSyncResult {
+  try {
+    const stdout = execSync(command, {
+      encoding: 'utf8',
+      timeout: options?.timeoutMs ?? 30_000,
+      maxBuffer: (options?.maxBufferMB ?? 1) * 1024 * 1024,
+      windowsHide: true,
+      ...(options?.cwd !== undefined ? { cwd: options.cwd } : {}),
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+    return { stdout: stdout.trimEnd(), stderr: '', exitCode: 0, ok: true };
+  } catch (err: unknown) {
+    const e = err as { stdout?: string | Buffer; stderr?: string | Buffer; status?: number };
+    return {
+      stdout: (e.stdout?.toString() ?? '').trimEnd(),
+      stderr: (e.stderr?.toString() ?? '').trimEnd(),
+      exitCode: e.status ?? 1,
+      ok: false,
+    };
+  }
+}
