@@ -3,7 +3,14 @@ import { platform, setPriority } from 'node:os';
 import { randomUUID } from 'node:crypto';
 import type { Tool, BashExecArgs, BashExecResult, BashExecOutputInfo } from '../types.js';
 import { detectDangers, type DangerDetectionOptions } from './bash-danger.js';
-import { processStream, DEFAULT_OUTPUT_CAP, type OutputCapConfig } from './bash-output.js';
+import {
+  StreamCapture,
+  processCapture,
+  resolveStreamBudget,
+  DEFAULT_OUTPUT_CAP,
+  type OutputCapConfig,
+} from './bash-output.js';
+import { analyzeOutputIntent } from './bash-output-intent.js';
 
 export interface BashExecToolOptions {
   /** Extra environment variables to inject into the spawned shell */
@@ -40,13 +47,14 @@ export interface BashExecToolOptions {
  */
 export type BashExecOutputCallback = (stream: 'stdout' | 'stderr', chunk: string) => void;
 
-// Hard in-memory buffer ceiling per stream (safety valve against runaway
-// output like `yes`). Output beyond this is dropped from the buffer; the
-// timeout still bounds total runtime. This caps how much can be spilled too.
-const BASH_EXEC_MAX_BUFFER_MB = 8;
 // Per-invocation timeout bounds (seconds)
 const BASH_EXEC_DEFAULT_TIMEOUT_S = 60;   // 1 minutes
 const BASH_EXEC_MAX_TIMEOUT_S     = 3600;  // 60 minutes hard cap
+
+// When output capping is disabled (outputCap:false), we still bound in-memory
+// capture to avoid OOM on a runaway producer. This is intentionally large so
+// "raw" output is effectively complete for any realistic command.
+const RAW_MODE_CEILING_BYTES = 64 * 1024 * 1024;
 
 const IS_WIN32 = platform() === 'win32';
 
@@ -144,9 +152,16 @@ Use \`<cmd> --help\` for quick reference, or \`cmds find\` / \`cmds info\` for p
 
 ## Output handling
 
-Large output is truncated before it reaches you: you receive the head and tail
-plus a banner with the total line/byte counts and a spill-file path holding the
-COMPLETE output. To read the rest, \`grep\`/\`sed\`/\`head\` that spill file.
+Output is capped before it reaches you (default ~64KB per stream). If a command
+exceeds the budget you get a head+tail summary plus a banner with the total byte
+count and a spill-file path that holds the captured output — \`grep\`/\`sed\`/\`head\`
+that file instead of re-running the command.
+
+Self-bounded reads are NOT clipped to the small default: \`head -n 500 f\`,
+\`tail -c 100000 f\`, \`sed -n '1,800p' f\`, \`grep -m 50 …\`, and \`… | head -40\` get
+a budget sized to what you asked for (up to a ~256KB hard ceiling). When you
+know you need a lot in one shot, set \`max_stdout_bytes\` explicitly (0 suppresses
+a stream). Prefer asking for the right amount once over many partial re-reads.
 
 ## Safety
 
@@ -224,6 +239,15 @@ export function createBashExecTool(options?: BashExecToolOptions): Tool {
           description:
             'very short briefing about why and how of this tool call, improve observability and auditability.',
         },
+        max_stdout_bytes: {
+          type: 'number',
+          description:
+            'Optional. Max bytes of stdout to return inline (0 suppresses it; still spilled to file). Use a larger value when you intentionally need a lot at once. Clamped to ~256KB.',
+        },
+        max_stderr_bytes: {
+          type: 'number',
+          description: 'Optional. Max bytes of stderr to return inline (0 suppresses it). Clamped to ~256KB.',
+        },
       },
       required: ['command', 'comment'],
     },
@@ -257,6 +281,17 @@ export function createBashExecTool(options?: BashExecToolOptions): Tool {
 
       const runId = randomUUID();
 
+      // Resolve how much of each stream to return inline. An explicit per-call
+      // byte arg wins; otherwise a self-bounded reader (head -n / sed range /
+      // grep -m / … | head) raises the budget toward the ceiling.
+      const intent = cap !== null ? analyzeOutputIntent(args.command) : undefined;
+      const stdoutBudget = cap !== null
+        ? resolveStreamBudget(intent, args.max_stdout_bytes, cap)
+        : 0;
+      const stderrBudget = cap !== null
+        ? resolveStreamBudget(undefined, args.max_stderr_bytes, cap)
+        : 0;
+
       // Clamp LLM-supplied timeout to [1, MAX] range, fall back to default
       const requestedS = args.timeout_seconds ?? BASH_EXEC_DEFAULT_TIMEOUT_S;
       const timeoutMs = Math.min(Math.max(requestedS, 1), BASH_EXEC_MAX_TIMEOUT_S) * 1000;
@@ -277,7 +312,15 @@ export function createBashExecTool(options?: BashExecToolOptions): Tool {
       sessionSignal?.addEventListener('abort', onSessionAbort);
 
       return new Promise((resolve) => {
-        const maxBytes = BASH_EXEC_MAX_BUFFER_MB * 1024 * 1024;
+        // Bound how much we keep in memory per stream. When capping is off, fall
+        // back to a generous ceiling so we still never hold unbounded output.
+        const ceiling = cap?.hardCeilingBytes ?? DEFAULT_OUTPUT_CAP.hardCeilingBytes;
+        const tailReserve = cap?.tailReserveBytes ?? DEFAULT_OUTPUT_CAP.tailReserveBytes;
+        // When capping is disabled, the raw path needs the complete output, so
+        // make the head limit large and keep no separate tail.
+        const rawMode = cap === null;
+        const headLimit = rawMode ? RAW_MODE_CEILING_BYTES : Math.max(1, ceiling - tailReserve);
+        const tailLimit = rawMode ? 0 : tailReserve;
 
         // detached: true on Unix → bash becomes process group leader (pgid === bash.pid)
         // Lets us kill the entire tree with kill(-pid) on Unix.
@@ -296,19 +339,15 @@ export function createBashExecTool(options?: BashExecToolOptions): Tool {
           lowerChildPriority(proc.pid, niceness);
         }
 
-        const stdoutChunks: Buffer[] = [];
-        const stderrChunks: Buffer[] = [];
-        let stdoutLen = 0;
-        let stderrLen = 0;
+        const stdoutCap = new StreamCapture(headLimit, tailLimit);
+        const stderrCap = new StreamCapture(headLimit, tailLimit);
 
         proc.stdout!.on('data', (chunk: Buffer) => {
-          stdoutLen += chunk.length;
-          if (stdoutLen <= maxBytes) stdoutChunks.push(chunk);
+          stdoutCap.push(chunk);
           if (onOutput) onOutput('stdout', chunk.toString('utf-8'));
         });
         proc.stderr!.on('data', (chunk: Buffer) => {
-          stderrLen += chunk.length;
-          if (stderrLen <= maxBytes) stderrChunks.push(chunk);
+          stderrCap.push(chunk);
           if (onOutput) onOutput('stderr', chunk.toString('utf-8'));
         });
 
@@ -339,8 +378,6 @@ export function createBashExecTool(options?: BashExecToolOptions): Tool {
 
         proc.on('close', (code) => {
           cleanup();
-          const rawStdout = Buffer.concat(stdoutChunks).toString('utf-8');
-          const rawStderr = Buffer.concat(stderrChunks).toString('utf-8');
           const aborted = localAc.signal.aborted;
           let abortSuffix = '';
           if (aborted) {
@@ -351,25 +388,29 @@ export function createBashExecTool(options?: BashExecToolOptions): Tool {
               abortSuffix = '\n[Aborted: session was terminated externally.]';
             }
           }
+          const exitCode = code ?? (aborted ? 130 : 1);
 
           // ── Output truncation + spill ─────────────────────────────────────
           if (cap === null) {
+            const out = stdoutCap.finalize();
+            const err = stderrCap.finalize();
+            const rawStderr = err.head.toString('utf-8');
             finish({
-              stdout: rawStdout,
+              stdout: out.head.toString('utf-8'),
               stderr: aborted ? rawStderr + abortSuffix : rawStderr,
-              exitCode: code ?? (aborted ? 130 : 1),
+              exitCode,
             });
             return;
           }
 
-          const outProcessed = processStream(rawStdout, 'stdout', runId, cap);
-          const errProcessed = processStream(rawStderr, 'stderr', runId, cap);
+          const outProcessed = processCapture(stdoutCap.finalize(), 'stdout', runId, stdoutBudget, cap);
+          const errProcessed = processCapture(stderrCap.finalize(), 'stderr', runId, stderrBudget, cap);
           const stderrText = aborted ? errProcessed.text + abortSuffix : errProcessed.text;
 
           const result: BashExecResult = {
             stdout: outProcessed.text,
             stderr: stderrText,
-            exitCode: code ?? (aborted ? 130 : 1),
+            exitCode,
           };
 
           if (outProcessed.truncated || errProcessed.truncated) {
@@ -380,6 +421,7 @@ export function createBashExecTool(options?: BashExecToolOptions): Tool {
             };
             if (outProcessed.spillPath !== undefined) info.stdoutSpillPath = outProcessed.spillPath;
             if (errProcessed.spillPath !== undefined) info.stderrSpillPath = errProcessed.spillPath;
+            if (outProcessed.capExceeded || errProcessed.capExceeded) info.capExceeded = true;
             result.output = info;
           }
 

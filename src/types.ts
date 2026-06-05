@@ -192,20 +192,29 @@ export interface BashExecArgs {
   timeout_seconds?: number;
   /** Short briefing on why/how, for the audit trail. */
   comment?: string;
+  /**
+   * Max bytes of stdout to return inline. 0 suppresses stdout (still spilled).
+   * Unset → tool default (~64KB). Clamped to the hard ceiling (~256KB).
+   */
+  max_stdout_bytes?: number;
+  /** Max bytes of stderr to return inline. Same semantics as max_stdout_bytes. */
+  max_stderr_bytes?: number;
 }
 
-/** Per-stream truncation metadata when output exceeds the return cap. */
+/** Per-stream truncation metadata when output exceeds the return budget. */
 export interface BashExecOutputInfo {
   /** True when stdout and/or stderr were truncated before returning. */
   truncated: boolean;
-  /** Spill file holding the full stdout (only when stdout was truncated). */
+  /** Spill file holding the captured stdout (only when stdout was truncated). */
   stdoutSpillPath?: string;
-  /** Spill file holding the full stderr (only when stderr was truncated). */
+  /** Spill file holding the captured stderr (only when stderr was truncated). */
   stderrSpillPath?: string;
   /** Total bytes produced on stdout before truncation. */
   stdoutTotalBytes: number;
   /** Total bytes produced on stderr before truncation. */
   stderrTotalBytes: number;
+  /** True when output exceeded the capture ceiling and middle bytes were lost. */
+  capExceeded?: boolean;
 }
 
 export interface BashExecResult {

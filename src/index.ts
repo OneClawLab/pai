@@ -9,8 +9,16 @@ export type {
   Violation,
   DetectResult,
 } from './tools/bash-danger.js';
-export { processStream, summarizeOutput, DEFAULT_OUTPUT_CAP } from './tools/bash-output.js';
-export type { OutputCapConfig, ProcessedStream } from './tools/bash-output.js';
+export {
+  processCapture,
+  resolveStreamBudget,
+  captureFromString,
+  StreamCapture,
+  DEFAULT_OUTPUT_CAP,
+} from './tools/bash-output.js';
+export type { OutputCapConfig, ProcessedStream, CapturedStream } from './tools/bash-output.js';
+export { analyzeOutputIntent } from './tools/bash-output-intent.js';
+export type { OutputIntent } from './tools/bash-output-intent.js';
 export { createFileWriteTool } from './tools/file-write.js';
 export type { FileWriteArgs, FileWriteResult } from './tools/file-write.js';
 export { initPai } from './lib/pai-instance.js';

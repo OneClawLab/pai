@@ -1,35 +1,54 @@
 /**
  * bash-output.ts — large-output truncation + spill-to-file for bash_exec.
  *
- * Problem: a single command can emit megabytes of stdout (cat a big file,
- * verbose build logs, an infinite `yes`). Returning all of it to the LLM
- * burns the token budget and can blow up the session.
+ * Problem: a single command can emit far more stdout than the LLM can or
+ * should consume (cat a big file, verbose build logs, an infinite `yes`).
+ * Returning all of it burns the token budget and can blow up the session.
  *
- * Strategy: cap the bytes returned to the model. When output exceeds the cap,
- * spill the COMPLETE output to a temp file and return only a summary — the
- * head and tail of the stream (whichever bound, bytes or lines, is smaller)
- * plus the total line/byte counts and the spill path. The model can then
- * `grep`/`sed` the spill file to retrieve whatever it actually needs.
+ * Model (byte-budget):
+ *   - A HARD CEILING bounds how much we ever keep in memory / return per stream
+ *     (default 256KB). No flag or intent can exceed it. We capture the HEAD up
+ *     to (ceiling − tailReserve) plus a rolling TAIL of the last `tailReserve`
+ *     bytes, so the end of a long log (where errors live) survives.
+ *   - A per-call BUDGET (default 64KB, ≤ ceiling) decides how much is returned
+ *     inline. Output within budget is returned verbatim; over budget yields a
+ *     head+tail summary plus a spill file holding everything we captured.
+ *   - Self-bounded readers (head -n / sed range / grep -m …) raise the budget
+ *     toward the ceiling (see resolveStreamBudget), so an explicit "read 500
+ *     lines" is not clipped to the tiny default. Line-based bounds derive their
+ *     byte budget from an assumed max line length, so pathologically long lines
+ *     (minified JSON / JSONL) still get clipped at the ceiling.
+ *
+ * This is a token-budget guard, not a safety boundary.
  */
 
 import { mkdtempSync, writeFileSync } from '../repo-utils/fs.js'
 import { path } from '../repo-utils/path.js'
 import { tmpdir } from 'node:os'
+import type { OutputIntent } from './bash-output-intent.js'
 
 export interface OutputCapConfig {
-  /** Max bytes returned to the LLM per stream. Default: 8192. */
-  maxBytesReturned: number
-  /** Max lines returned to the LLM per stream. Default: 200. */
-  maxLinesReturned: number
-  /** When true, spill the full output to a file when truncated. Default: true. */
+  /** Default bytes returned inline per stream when nothing else applies. */
+  defaultReturnBytes: number
+  /** Absolute max bytes ever captured/returned per stream. Nothing exceeds this. */
+  hardCeilingBytes: number
+  /** Assumed max bytes per line, used to turn a line bound into a byte budget. */
+  assumedLineBytes: number
+  /** Bytes of the ceiling reserved for the rolling tail (rest is head). */
+  tailReserveBytes: number
+  /** When true, spill the captured output to a file when truncated. */
   spillToFile: boolean
   /** Directory for spill files. Default: os tmpdir. */
   spillDir?: string
 }
 
+const KB = 1024
+
 export const DEFAULT_OUTPUT_CAP: OutputCapConfig = {
-  maxBytesReturned: 8 * 1024,
-  maxLinesReturned: 200,
+  defaultReturnBytes: 64 * KB,
+  hardCeilingBytes: 256 * KB,
+  assumedLineBytes: 1 * KB,
+  tailReserveBytes: 64 * KB,
   spillToFile: true,
 }
 
@@ -37,51 +56,137 @@ export interface ProcessedStream {
   /** The (possibly truncated) text to hand back to the LLM. */
   text: string
   truncated: boolean
+  /** True total bytes produced by the command (even if we dropped some). */
   totalBytes: number
-  totalLines: number
+  /** Bytes actually returned inline. */
   returnedBytes: number
-  /** Absolute POSIX path to the full output, when spilled. */
+  /** True when output exceeded the capture ceiling (middle bytes were lost). */
+  capExceeded: boolean
+  /** Absolute POSIX path to the captured output, when spilled. */
   spillPath?: string
 }
 
-function countLines(s: string): number {
-  if (s.length === 0) return 0
-  let n = 0
-  for (let i = 0; i < s.length; i++) if (s.charCodeAt(i) === 10) n++
-  // Count a final partial line (no trailing newline) as a line too.
-  if (s.charCodeAt(s.length - 1) !== 10) n++
-  return n
+// ─── Capture (bounds memory; preserves head + tail) ─────────────────────────
+
+export interface CapturedStream {
+  head: Buffer
+  tail: Buffer
+  totalBytes: number
+  /** True when total exceeded head+tail capacity (middle bytes dropped). */
+  dropped: boolean
 }
 
 /**
- * Build a head+tail summary of `full` that fits within the byte/line caps.
- * Uses whichever bound (bytes or lines) yields the smaller summary, so a few
- * very long lines are capped by bytes and many short lines are capped by lines.
+ * Accumulates a stream into a bounded head buffer plus a rolling tail ring.
+ * Memory is capped at headLimit + tailLimit regardless of how much is pushed.
  */
-export function summarizeOutput(full: string, cap: OutputCapConfig): string {
-  const lines = full.split('\n')
-  const halfLines = Math.max(1, Math.floor(cap.maxLinesReturned / 2))
+export class StreamCapture {
+  private head: Buffer[] = []
+  private headLen = 0
+  private tail: Buffer[] = []
+  private tailLen = 0
+  private total = 0
 
-  // Line-bounded head/tail.
-  const headLines = lines.slice(0, halfLines).join('\n')
-  const tailLines = lines.slice(Math.max(halfLines, lines.length - halfLines)).join('\n')
+  constructor(
+    private readonly headLimit: number,
+    private readonly tailLimit: number,
+  ) {}
 
-  // Byte-bounded head/tail.
-  const halfBytes = Math.max(1, Math.floor(cap.maxBytesReturned / 2))
-  const buf = Buffer.from(full, 'utf-8')
-  const headBytes = buf.subarray(0, halfBytes).toString('utf-8')
-  const tailBytes = buf.subarray(Math.max(halfBytes, buf.length - halfBytes)).toString('utf-8')
+  push(chunk: Buffer): void {
+    if (chunk.length === 0) return
+    this.total += chunk.length
 
-  const lineSummary = `${headLines}\n... [omitted middle] ...\n${tailLines}`
-  const byteSummary = `${headBytes}\n... [omitted middle] ...\n${tailBytes}`
+    if (this.headLen < this.headLimit) {
+      const room = this.headLimit - this.headLen
+      if (chunk.length <= room) {
+        this.head.push(chunk)
+        this.headLen += chunk.length
+        return
+      }
+      this.head.push(chunk.subarray(0, room))
+      this.headLen += room
+      this.pushTail(chunk.subarray(room))
+      return
+    }
+    this.pushTail(chunk)
+  }
 
-  // Pick the smaller; this respects the tighter of the two caps.
-  return byteSummary.length <= lineSummary.length ? byteSummary : lineSummary
+  private pushTail(chunk: Buffer): void {
+    // If a single chunk alone exceeds the tail limit, keep only its last
+    // tailLimit bytes — otherwise the ring could hold an arbitrarily large
+    // buffer (a lone giant chunk is never split by the trim loop below).
+    let c = chunk
+    if (c.length >= this.tailLimit) {
+      c = c.subarray(c.length - this.tailLimit)
+      this.tail = [c]
+      this.tailLen = c.length
+      return
+    }
+    this.tail.push(c)
+    this.tailLen += c.length
+    // Drop whole leading buffers while the remainder still covers tailLimit.
+    while (this.tail.length > 1 && this.tailLen - this.tail[0]!.length >= this.tailLimit) {
+      this.tailLen -= this.tail.shift()!.length
+    }
+  }
+
+  get totalBytes(): number {
+    return this.total
+  }
+
+  finalize(): CapturedStream {
+    const head = Buffer.concat(this.head)
+    const tail = Buffer.concat(this.tail)
+    return {
+      head,
+      tail,
+      totalBytes: this.total,
+      dropped: this.total > head.length + tail.length,
+    }
+  }
 }
+
+/** Build a CapturedStream from a complete string (used by tests / raw paths). */
+export function captureFromString(full: string, cap: OutputCapConfig): CapturedStream {
+  const sc = new StreamCapture(cap.hardCeilingBytes - cap.tailReserveBytes, cap.tailReserveBytes)
+  sc.push(Buffer.from(full, 'utf-8'))
+  return sc.finalize()
+}
+
+// ─── Budget resolution ──────────────────────────────────────────────────────
+
+/**
+ * Decide how many bytes to return inline for a stream.
+ *
+ * Precedence: an explicit per-call byte limit wins (0 = suppress); otherwise a
+ * self-bounded reader raises the budget from its declared size; otherwise the
+ * default. Everything is clamped to [0, hardCeiling].
+ */
+export function resolveStreamBudget(
+  intent: OutputIntent | undefined,
+  explicitBytes: number | undefined,
+  cap: OutputCapConfig,
+): number {
+  const ceiling = cap.hardCeilingBytes
+  if (explicitBytes !== undefined) {
+    return Math.max(0, Math.min(explicitBytes, ceiling))
+  }
+  if (intent?.bounded) {
+    if (intent.bytes !== undefined) {
+      return Math.min(Math.max(intent.bytes, cap.defaultReturnBytes), ceiling)
+    }
+    if (intent.lines !== undefined) {
+      const derived = intent.lines * cap.assumedLineBytes
+      return Math.min(Math.max(derived, cap.defaultReturnBytes), ceiling)
+    }
+  }
+  return cap.defaultReturnBytes
+}
+
+// ─── Spill ──────────────────────────────────────────────────────────────────
 
 let spillSessionDir: string | undefined
 
-/** Lazily create one spill directory per process run. */
 function getSpillDir(cap: OutputCapConfig): string {
   if (cap.spillDir) return cap.spillDir
   if (!spillSessionDir) {
@@ -90,57 +195,99 @@ function getSpillDir(cap: OutputCapConfig): string {
   return spillSessionDir
 }
 
+/** The text we persist to the spill file (complete, or head+marker+tail). */
+function spillContent(c: CapturedStream): string {
+  if (!c.dropped) return Buffer.concat([c.head, c.tail]).toString('utf-8')
+  const lost = c.totalBytes - c.head.length - c.tail.length
+  return (
+    c.head.toString('utf-8') +
+    `\n... [${lost} bytes not captured — exceeded capture ceiling] ...\n` +
+    c.tail.toString('utf-8')
+  )
+}
+
+function writeSpill(c: CapturedStream, streamName: string, runId: string, cap: OutputCapConfig): string | undefined {
+  if (!cap.spillToFile) return undefined
+  try {
+    const file = path.join(getSpillDir(cap), `${runId}.${streamName}.txt`)
+    writeFileSync(file, spillContent(c), 'utf-8')
+    return file
+  } catch {
+    return undefined
+  }
+}
+
+// ─── Presentation ────────────────────────────────────────────────────────────
+
+/** head[0:half] + marker + tail[-half:], fitting within `budget` bytes. */
+function headTailSummary(c: CapturedStream, budget: number): string {
+  const half = Math.max(1, Math.floor(budget / 2))
+  let headBuf: Buffer
+  let tailBuf: Buffer
+  if (!c.dropped) {
+    const full = Buffer.concat([c.head, c.tail])
+    headBuf = full.subarray(0, half)
+    tailBuf = full.subarray(Math.max(half, full.length - half))
+  } else {
+    headBuf = c.head.subarray(0, half)
+    tailBuf = c.tail.subarray(Math.max(0, c.tail.length - half))
+  }
+  return `${headBuf.toString('utf-8')}\n... [omitted middle] ...\n${tailBuf.toString('utf-8')}`
+}
+
 /**
- * Apply the output cap to a single stream.
+ * Apply the return budget to a captured stream.
  *
- * If `full` is within both caps, returns it unchanged (`truncated: false`).
- * Otherwise spills the complete text to a file (when enabled) and returns a
- * head+tail summary annotated with totals and the spill path.
+ * - budget 0 → stream suppressed (only a note is returned; full output still
+ *   spilled so it can be retrieved).
+ * - total ≤ budget and nothing dropped → returned verbatim (not truncated).
+ * - otherwise → head+tail summary within budget, plus a spill file.
  */
-export function processStream(
-  full: string,
+export function processCapture(
+  c: CapturedStream,
   streamName: 'stdout' | 'stderr',
   runId: string,
+  budget: number,
   cap: OutputCapConfig,
 ): ProcessedStream {
-  const totalBytes = Buffer.byteLength(full, 'utf-8')
-  const totalLines = countLines(full)
+  const base = { totalBytes: c.totalBytes, capExceeded: c.dropped }
 
-  const withinBytes = totalBytes <= cap.maxBytesReturned
-  const withinLines = totalLines <= cap.maxLinesReturned
-  if (withinBytes && withinLines) {
-    return { text: full, truncated: false, totalBytes, totalLines, returnedBytes: totalBytes }
+  if (budget <= 0) {
+    const spillPath = c.totalBytes > 0 ? writeSpill(c, streamName, runId, cap) : undefined
+    const note =
+      c.totalBytes === 0
+        ? ''
+        : `[${streamName} suppressed (limit 0): ${c.totalBytes} bytes total` +
+          (spillPath ? `. Full output: ${spillPath}` : ``) + `]`
+    const r: ProcessedStream = { ...base, text: note, truncated: c.totalBytes > 0, returnedBytes: 0 }
+    if (spillPath !== undefined) r.spillPath = spillPath
+    return r
   }
 
-  let spillPath: string | undefined
-  if (cap.spillToFile) {
-    try {
-      const dir = getSpillDir(cap)
-      const file = path.join(dir, `${runId}.${streamName}.txt`)
-      writeFileSync(file, full, 'utf-8')
-      spillPath = file
-    } catch {
-      spillPath = undefined // spill is best-effort; summary is still returned
-    }
+  if (!c.dropped && c.totalBytes <= budget) {
+    const full = Buffer.concat([c.head, c.tail]).toString('utf-8')
+    return { ...base, text: full, truncated: false, returnedBytes: c.totalBytes }
   }
 
-  const summary = summarizeOutput(full, cap)
+  const spillPath = writeSpill(c, streamName, runId, cap)
+  const completeness = c.dropped
+    ? `head+tail only — output exceeded the ${Math.round(cap.hardCeilingBytes / KB)}KB capture ceiling, middle lost`
+    : `showing head+tail`
   const banner =
-    `[${streamName} truncated: ${totalLines} lines / ${totalBytes} bytes total, ` +
-    `showing head+tail` +
-    (spillPath ? `. Full output: ${spillPath} (use grep/sed/head to read it).` : ` (spill disabled).`) +
+    `[${streamName} truncated: ${c.totalBytes} bytes total, ${completeness}` +
+    (spillPath
+      ? `. Captured output: ${spillPath} (grep/sed/head it instead of re-running).`
+      : ` (spill disabled).`) +
     `]`
-
-  const text = `${banner}\n${summary}`
-  const result: ProcessedStream = {
+  const text = `${banner}\n${headTailSummary(c, budget)}`
+  const r: ProcessedStream = {
+    ...base,
     text,
     truncated: true,
-    totalBytes,
-    totalLines,
     returnedBytes: Buffer.byteLength(text, 'utf-8'),
   }
-  if (spillPath !== undefined) result.spillPath = spillPath
-  return result
+  if (spillPath !== undefined) r.spillPath = spillPath
+  return r
 }
 
 /** Reset cached per-run spill dir (used by tests). */

@@ -452,7 +452,7 @@ describe('bash_exec tool', () => {
 
   describe('output truncation + spill (integration)', () => {
     it('truncates large output and reports a spill path', async () => {
-      const t = createBashExecTool({ outputCap: { maxBytesReturned: 256, maxLinesReturned: 10 } });
+      const t = createBashExecTool({ outputCap: { defaultReturnBytes: 256, hardCeilingBytes: 4096 } });
       const result = await t.handler({ command: 'seq 1 5000', comment: 'big output' });
       expect(result.exitCode).toBe(0);
       expect(result.output?.truncated).toBe(true);
@@ -461,11 +461,13 @@ describe('bash_exec tool', () => {
       expect(result.stdout.length).toBeLessThan(20000);
     });
 
-    it('the spill file contains the complete output', async () => {
-      const t = createBashExecTool({ outputCap: { maxBytesReturned: 256, maxLinesReturned: 10 } });
+    it('the spill file contains the captured output', async () => {
+      // seq 1..1000 ≈ 3.9KB, fits under the 64KB ceiling here → complete spill.
+      const t = createBashExecTool({ outputCap: { defaultReturnBytes: 256 } });
       const result = await t.handler({ command: 'seq 1 1000', comment: 'spill' });
       const spill = result.output?.stdoutSpillPath;
       expect(spill).toBeTruthy();
+      expect(result.output?.capExceeded).toBeFalsy();
       const onDisk = readFileSync(spill!, 'utf-8');
       expect(onDisk.trim().split('\n').length).toBe(1000);
       expect(onDisk).toContain('1000');
@@ -483,6 +485,38 @@ describe('bash_exec tool', () => {
       const result = await t.handler({ command: 'seq 1 1000', comment: 'raw' });
       expect(result.stdout.trim().split('\n').length).toBe(1000);
       expect(result.output).toBeUndefined();
+    });
+
+    it('does NOT truncate a self-bounded reader (head -n) even with a tiny default', async () => {
+      // default budget is tiny, but `head -n 200` should raise it via the line bound.
+      const t = createBashExecTool({
+        outputCap: { defaultReturnBytes: 128, assumedLineBytes: 64, hardCeilingBytes: 256 * 1024 },
+      });
+      const result = await t.handler({ command: 'seq 1 100000 | head -n 200', comment: 'bounded read' });
+      expect(result.exitCode).toBe(0);
+      // 200 lines of short numbers is < 200*64 budget → returned verbatim.
+      expect(result.output).toBeUndefined();
+      expect(result.stdout).toContain('200');
+      expect(result.stdout).not.toContain('truncated');
+    });
+
+    it('honors an explicit max_stdout_bytes larger than the default', async () => {
+      const t = createBashExecTool({ outputCap: { defaultReturnBytes: 64, hardCeilingBytes: 256 * 1024 } });
+      // ~3.9KB output; default 64 would truncate, explicit 200000 should not.
+      const result = await t.handler({
+        command: 'seq 1 1000', comment: 'explicit', max_stdout_bytes: 200000,
+      });
+      expect(result.output).toBeUndefined();
+      expect(result.stdout.trim().split('\n').length).toBe(1000);
+    });
+
+    it('max_stdout_bytes=0 suppresses stdout but still spills', async () => {
+      const t = createBashExecTool();
+      const result = await t.handler({ command: 'seq 1 100', comment: 'suppress', max_stdout_bytes: 0 });
+      expect(result.output?.stdoutSpillPath).toBeTruthy();
+      expect(result.stdout).toContain('suppressed');
+      const onDisk = readFileSync(result.output!.stdoutSpillPath!, 'utf-8');
+      expect(onDisk).toContain('100');
     });
   });
 
