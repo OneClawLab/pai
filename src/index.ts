@@ -1,5 +1,16 @@
 export { createBashExecTool, BASH_EXEC_TOOL_DESC } from './tools/bash-exec.js';
 export type { BashExecOutputCallback, BashExecToolOptions } from './tools/bash-exec.js';
+export { detectDangers, PRESET_RULES } from './tools/bash-danger.js';
+export type {
+  DangerDetectionOptions,
+  DangerRule,
+  DangerSeverity,
+  DangerContext,
+  Violation,
+  DetectResult,
+} from './tools/bash-danger.js';
+export { processStream, summarizeOutput, DEFAULT_OUTPUT_CAP } from './tools/bash-output.js';
+export type { OutputCapConfig, ProcessedStream } from './tools/bash-output.js';
 export { createFileWriteTool } from './tools/file-write.js';
 export type { FileWriteArgs, FileWriteResult } from './tools/file-write.js';
 export { initPai } from './lib/pai-instance.js';

@@ -1,6 +1,9 @@
 import { execSync, spawn } from 'node:child_process';
-import { platform } from 'node:os';
-import type { Tool, BashExecArgs, BashExecResult } from '../types.js';
+import { platform, setPriority } from 'node:os';
+import { randomUUID } from 'node:crypto';
+import type { Tool, BashExecArgs, BashExecResult, BashExecOutputInfo } from '../types.js';
+import { detectDangers, type DangerDetectionOptions } from './bash-danger.js';
+import { processStream, DEFAULT_OUTPUT_CAP, type OutputCapConfig } from './bash-output.js';
 
 export interface BashExecToolOptions {
   /** Extra environment variables to inject into the spawned shell */
@@ -9,6 +12,26 @@ export interface BashExecToolOptions {
   onOutput?: BashExecOutputCallback
   /** Override the default tool description sent to the LLM */
   description?: string
+  /**
+   * AST-based danger detection. Enabled by default (catastrophic commands are
+   * blocked, risky commands are annotated). Set `{ enabled: false }` to disable,
+   * or `{ mode: 'warn-only' }` to never block.
+   */
+  dangerDetection?: DangerDetectionOptions
+  /**
+   * Large-output truncation. By default, per-stream output is capped (~8KB /
+   * 200 lines) and the full output is spilled to a temp file. Pass a partial
+   * config to tune, or `{ ... , spillToFile: false }` to disable spilling.
+   * Set the whole option to `false` to return raw, uncapped output (legacy).
+   */
+  outputCap?: Partial<OutputCapConfig> | false
+  /**
+   * Lower the spawned process's scheduling priority so the human's interactive
+   * work always wins CPU contention. Default: true.
+   */
+  lowerPriority?: boolean
+  /** Niceness applied when lowerPriority is true. Default: 10. */
+  niceness?: number
 }
 
 /**
@@ -17,8 +40,10 @@ export interface BashExecToolOptions {
  */
 export type BashExecOutputCallback = (stream: 'stdout' | 'stderr', chunk: string) => void;
 
-// MAX LENGTH in MB that bash_exec tool can output to LLM
-const BASH_EXEC_TOOL_MAX_OUTPUT_MB = 8;
+// Hard in-memory buffer ceiling per stream (safety valve against runaway
+// output like `yes`). Output beyond this is dropped from the buffer; the
+// timeout still bounds total runtime. This caps how much can be spilled too.
+const BASH_EXEC_MAX_BUFFER_MB = 8;
 // Per-invocation timeout bounds (seconds)
 const BASH_EXEC_DEFAULT_TIMEOUT_S = 60;   // 1 minutes
 const BASH_EXEC_MAX_TIMEOUT_S     = 3600;  // 60 minutes hard cap
@@ -83,6 +108,23 @@ function killTree(pid: number): void {
   }
 }
 
+/**
+ * Lower the scheduling priority of a spawned process so the human's
+ * interactive work (editor, terminal, the agent front-end) always wins CPU
+ * contention. Best-effort: failures are ignored, and child processes spawned
+ * later mostly inherit the priority (Unix nice; Windows priority class).
+ *
+ * This is a fairness measure, not isolation — the process keeps full access
+ * to the machine, it just yields the CPU when the human needs it.
+ */
+function lowerChildPriority(pid: number, niceness: number): void {
+  try {
+    setPriority(pid, niceness);
+  } catch {
+    // Not permitted / process already gone — ignore.
+  }
+}
+
 export const BASH_EXEC_TOOL_DESC = `
 Execute a shell command on bash and return stdout, stderr, and exitCode.
 Supports full bash syntax: pipes, redirections, xargs, heredocs, shell scripts.
@@ -99,6 +141,19 @@ Beyond standard GNU/Linux commands, this system has these CLI tools:
 - **pai** — LLM interface. \`pai chat "<msg>"\` for LLM calls (supports tool use, streaming, sessions). \`pai embed "<text>"\` for embeddings. Can implement sub-agents via session files.
 
 Use \`<cmd> --help\` for quick reference, or \`cmds find\` / \`cmds info\` for progressive discovery of all available commands.
+
+## Output handling
+
+Large output is truncated before it reaches you: you receive the head and tail
+plus a banner with the total line/byte counts and a spill-file path holding the
+COMPLETE output. To read the rest, \`grep\`/\`sed\`/\`head\` that spill file.
+
+## Safety
+
+Never-legitimate, irreversible commands (e.g. \`rm -rf /\`, \`rm -rf ~\`, \`mkfs\`,
+writing a raw disk device, fork bombs) are refused before running. Risky but
+legitimate commands (e.g. \`git reset --hard\`, \`curl ... | bash\`) run normally
+but are flagged in the result.
 `.trim();
 
 const BASH_EXEC_ARG_COMMAND_DESC = `
@@ -129,8 +184,22 @@ For complex logic, prioritize a human-readable multi-line format using line brea
  * session-level signal so either source can trigger cleanup.
  */
 export function createBashExecTool(options?: BashExecToolOptions): Tool {
-  const { extraEnv, onOutput, description = BASH_EXEC_TOOL_DESC } = options ?? {};
+  const {
+    extraEnv,
+    onOutput,
+    description = BASH_EXEC_TOOL_DESC,
+    dangerDetection,
+    outputCap,
+    lowerPriority = true,
+    niceness = 10,
+  } = options ?? {};
   const shell = detectShell();
+
+  // Resolve the output cap once. `false` disables capping entirely.
+  const cap: OutputCapConfig | null =
+    outputCap === false
+      ? null
+      : { ...DEFAULT_OUTPUT_CAP, ...(outputCap ?? {}) };
 
   return {
     name: 'bash_exec',
@@ -167,6 +236,27 @@ export function createBashExecTool(options?: BashExecToolOptions): Tool {
         return { stdout: '', stderr: '[Aborted: session was terminated externally.]', exitCode: 1 };
       }
 
+      // ── Danger detection (pre-spawn) ──────────────────────────────────────
+      // Parse the command into an AST and run preset rules. Catastrophic,
+      // never-legitimate commands are blocked before any process is spawned;
+      // risky-but-legitimate commands are annotated and allowed to run.
+      const danger = detectDangers(args.command, dangerDetection);
+      if (danger.blocked) {
+        const denied = danger.violations.filter((v) => v.severity === 'deny');
+        const msg = denied.map((v) => `[blocked: ${v.code}] ${v.message}`).join('\n');
+        return {
+          stdout: '',
+          stderr: `Refused to execute — command blocked by danger detection.\n${msg}`,
+          exitCode: 1,
+          violations: danger.violations.map((v) => ({ code: v.code, severity: v.severity, message: v.message })),
+        };
+      }
+      const warnViolations = danger.violations.map((v) => ({
+        code: v.code, severity: v.severity, message: v.message,
+      }));
+
+      const runId = randomUUID();
+
       // Clamp LLM-supplied timeout to [1, MAX] range, fall back to default
       const requestedS = args.timeout_seconds ?? BASH_EXEC_DEFAULT_TIMEOUT_S;
       const timeoutMs = Math.min(Math.max(requestedS, 1), BASH_EXEC_MAX_TIMEOUT_S) * 1000;
@@ -187,7 +277,7 @@ export function createBashExecTool(options?: BashExecToolOptions): Tool {
       sessionSignal?.addEventListener('abort', onSessionAbort);
 
       return new Promise((resolve) => {
-        const maxBytes = BASH_EXEC_TOOL_MAX_OUTPUT_MB * 1024 * 1024;
+        const maxBytes = BASH_EXEC_MAX_BUFFER_MB * 1024 * 1024;
 
         // detached: true on Unix → bash becomes process group leader (pgid === bash.pid)
         // Lets us kill the entire tree with kill(-pid) on Unix.
@@ -200,6 +290,11 @@ export function createBashExecTool(options?: BashExecToolOptions): Tool {
           windowsHide: true,
           env: extraEnv ? { ...process.env, ...extraEnv } : undefined,
         });
+
+        // Lower priority so the human always wins CPU contention (best-effort).
+        if (lowerPriority && proc.pid !== undefined) {
+          lowerChildPriority(proc.pid, niceness);
+        }
 
         const stdoutChunks: Buffer[] = [];
         const stderrChunks: Buffer[] = [];
@@ -232,15 +327,20 @@ export function createBashExecTool(options?: BashExecToolOptions): Tool {
           localAc.signal.removeEventListener('abort', onAbort);
         };
 
+        const finish = (result: BashExecResult): void => {
+          if (warnViolations.length > 0) result.violations = warnViolations;
+          resolve(result);
+        };
+
         proc.on('error', (err) => {
           cleanup();
-          resolve({ stdout: '', stderr: err.message, exitCode: 1 });
+          finish({ stdout: '', stderr: err.message, exitCode: 1 });
         });
 
         proc.on('close', (code) => {
           cleanup();
-          const stdout = Buffer.concat(stdoutChunks).toString('utf-8');
-          const stderr = Buffer.concat(stderrChunks).toString('utf-8');
+          const rawStdout = Buffer.concat(stdoutChunks).toString('utf-8');
+          const rawStderr = Buffer.concat(stderrChunks).toString('utf-8');
           const aborted = localAc.signal.aborted;
           let abortSuffix = '';
           if (aborted) {
@@ -251,11 +351,39 @@ export function createBashExecTool(options?: BashExecToolOptions): Tool {
               abortSuffix = '\n[Aborted: session was terminated externally.]';
             }
           }
-          resolve({
-            stdout,
-            stderr: aborted ? stderr + abortSuffix : stderr,
+
+          // ── Output truncation + spill ─────────────────────────────────────
+          if (cap === null) {
+            finish({
+              stdout: rawStdout,
+              stderr: aborted ? rawStderr + abortSuffix : rawStderr,
+              exitCode: code ?? (aborted ? 130 : 1),
+            });
+            return;
+          }
+
+          const outProcessed = processStream(rawStdout, 'stdout', runId, cap);
+          const errProcessed = processStream(rawStderr, 'stderr', runId, cap);
+          const stderrText = aborted ? errProcessed.text + abortSuffix : errProcessed.text;
+
+          const result: BashExecResult = {
+            stdout: outProcessed.text,
+            stderr: stderrText,
             exitCode: code ?? (aborted ? 130 : 1),
-          });
+          };
+
+          if (outProcessed.truncated || errProcessed.truncated) {
+            const info: BashExecOutputInfo = {
+              truncated: true,
+              stdoutTotalBytes: outProcessed.totalBytes,
+              stderrTotalBytes: errProcessed.totalBytes,
+            };
+            if (outProcessed.spillPath !== undefined) info.stdoutSpillPath = outProcessed.spillPath;
+            if (errProcessed.spillPath !== undefined) info.stderrSpillPath = errProcessed.spillPath;
+            result.output = info;
+          }
+
+          finish(result);
         });
       });
     },

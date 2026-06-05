@@ -188,14 +188,34 @@ export interface ModelConfigOptions extends CLIOptions {
 export interface BashExecArgs {
   command: string;
   cwd?: string;
-  /** Timeout in seconds for this invocation. Default: 600. Max: 3600. */
+  /** Timeout in seconds for this invocation. Default: 60. Max: 3600. */
   timeout_seconds?: number;
+  /** Short briefing on why/how, for the audit trail. */
+  comment?: string;
+}
+
+/** Per-stream truncation metadata when output exceeds the return cap. */
+export interface BashExecOutputInfo {
+  /** True when stdout and/or stderr were truncated before returning. */
+  truncated: boolean;
+  /** Spill file holding the full stdout (only when stdout was truncated). */
+  stdoutSpillPath?: string;
+  /** Spill file holding the full stderr (only when stderr was truncated). */
+  stderrSpillPath?: string;
+  /** Total bytes produced on stdout before truncation. */
+  stdoutTotalBytes: number;
+  /** Total bytes produced on stderr before truncation. */
+  stderrTotalBytes: number;
 }
 
 export interface BashExecResult {
   stdout: string;
   stderr: string;
   exitCode: number;
+  /** Present only when output was truncated/spilled (see BashExecOutputInfo). */
+  output?: BashExecOutputInfo;
+  /** Danger-detection findings (warn-level matches; deny matches block the run). */
+  violations?: Array<{ code: string; severity: 'deny' | 'warn'; message: string }>;
 }
 
 // ============================================================================

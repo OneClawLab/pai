@@ -1,7 +1,7 @@
 {
   "name": "@theclawlab/pai",
   "type": "module",
-  "version": "2.5.1",
+  "version": "2.6.0",
   "description": "pai is a linux command to interact with LLMs (with only one bash_exec tool and basic session support).",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -44,6 +44,7 @@
   },
   "dependencies": {
     "@mariozechner/pi-ai": "^0.57.1",
+    "bash-parser": "^0.5.0",
     "commander": "^14.0.3"
   }
 }

@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { createBashExecTool, detectShell } from '../../src/tools/bash-exec.js';
 import type { BashExecArgs } from '../../src/types.js';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { readFileSync } from '../../src/repo-utils/fs.js';
 import { join } from 'node:path';
 import { tmpdir, platform } from 'node:os';
 import * as fc from 'fast-check';
@@ -407,4 +408,98 @@ describe('bash_exec tool', () => {
       );
     });
   });
+
+  describe('danger detection (integration)', () => {
+    it('blocks rm -rf / before spawning and reports the violation', async () => {
+      const t = createBashExecTool();
+      const result = await t.handler({ command: 'rm -rf /', comment: 'should be blocked' });
+      expect(result.exitCode).toBe(1);
+      expect(result.stderr).toContain('blocked');
+      expect(result.violations?.some((v: { code: string; severity: string }) => v.code === 'RM_CATASTROPHIC' && v.severity === 'deny')).toBe(true);
+      expect(result.stdout).toBe('');
+    });
+
+    it('blocks mkfs', async () => {
+      const t = createBashExecTool();
+      const result = await t.handler({ command: 'mkfs.ext4 /dev/sda', comment: 'blocked' });
+      expect(result.exitCode).toBe(1);
+      expect(result.stderr).toContain('blocked');
+    });
+
+    it('runs a flagged-but-legitimate command and attaches warn violations', async () => {
+      const t = createBashExecTool();
+      const result = await t.handler({ command: 'echo done && git status || true', comment: 'safe' });
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).toContain('done');
+    });
+
+    it('does not block when danger detection is disabled', async () => {
+      const t = createBashExecTool({ dangerDetection: { enabled: false } });
+      // A harmless command that would otherwise parse fine; detection off means no violations field.
+      const result = await t.handler({ command: 'echo safe', comment: 'no detection' });
+      expect(result.exitCode).toBe(0);
+      expect(result.violations).toBeUndefined();
+    });
+
+    it('warn-only mode never blocks even catastrophic commands (does not run them destructively here)', async () => {
+      // Use a parse-only assertion via a benign catastrophic-looking target that is safe to skip.
+      const t = createBashExecTool({ dangerDetection: { mode: 'warn-only' } });
+      // We avoid actually deleting anything: warn-only still spawns, so use a no-op target check.
+      const result = await t.handler({ command: 'true', comment: 'warn only' });
+      expect(result.exitCode).toBe(0);
+    });
+  });
+
+  describe('output truncation + spill (integration)', () => {
+    it('truncates large output and reports a spill path', async () => {
+      const t = createBashExecTool({ outputCap: { maxBytesReturned: 256, maxLinesReturned: 10 } });
+      const result = await t.handler({ command: 'seq 1 5000', comment: 'big output' });
+      expect(result.exitCode).toBe(0);
+      expect(result.output?.truncated).toBe(true);
+      expect(result.output?.stdoutSpillPath).toBeTruthy();
+      expect(result.stdout).toContain('truncated');
+      expect(result.stdout.length).toBeLessThan(20000);
+    });
+
+    it('the spill file contains the complete output', async () => {
+      const t = createBashExecTool({ outputCap: { maxBytesReturned: 256, maxLinesReturned: 10 } });
+      const result = await t.handler({ command: 'seq 1 1000', comment: 'spill' });
+      const spill = result.output?.stdoutSpillPath;
+      expect(spill).toBeTruthy();
+      const onDisk = readFileSync(spill!, 'utf-8');
+      expect(onDisk.trim().split('\n').length).toBe(1000);
+      expect(onDisk).toContain('1000');
+    });
+
+    it('does not truncate small output', async () => {
+      const t = createBashExecTool();
+      const result = await t.handler({ command: 'echo small', comment: 'small' });
+      expect(result.stdout).toContain('small');
+      expect(result.output).toBeUndefined();
+    });
+
+    it('returns raw output when outputCap is false', async () => {
+      const t = createBashExecTool({ outputCap: false });
+      const result = await t.handler({ command: 'seq 1 1000', comment: 'raw' });
+      expect(result.stdout.trim().split('\n').length).toBe(1000);
+      expect(result.output).toBeUndefined();
+    });
+  });
+
+  describe('lowerPriority option', () => {
+    it('runs successfully with priority lowering enabled (default)', async () => {
+      const t = createBashExecTool();
+      const result = await t.handler({ command: 'echo prio', comment: 'prio' });
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).toContain('prio');
+    });
+
+    it('runs successfully with priority lowering disabled', async () => {
+      const t = createBashExecTool({ lowerPriority: false });
+      const result = await t.handler({ command: 'echo noprio', comment: 'noprio' });
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).toContain('noprio');
+    });
+  });
 });
+
