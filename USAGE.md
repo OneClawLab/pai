@@ -194,6 +194,33 @@ for await (const event of chat(
 }
 ```
 
+#### Configuring `bash_exec`
+
+`createBashExecTool(options)` accepts:
+
+```typescript
+const tool = createBashExecTool({
+  // Output truncation (see the bash_exec tool section for behavior).
+  // Pass `false` to disable capping entirely, or a partial config to tune:
+  outputCap: { defaultReturnBytes: 64 * 1024, hardCeilingBytes: 256 * 1024 },
+
+  // AST danger detection (on by default).
+  dangerDetection: {
+    // mode: 'warn-only',          // never block, only flag
+    // disabledCodes: ['GIT_DESTRUCTIVE'],
+    pathPolicy: {
+      rules: [
+        { pattern: '~/projects/**', allow: ['read', 'write', 'create', 'overwrite', 'delete'] },
+        { pattern: '~/.ssh',        deny:  ['write', 'create', 'overwrite', 'delete'], allow: ['read'] },
+      ],
+      default: 'warn',             // verdict for paths matched by no rule
+    },
+  },
+
+  lowerPriority: true,             // run subprocess at lowered CPU priority (default)
+});
+```
+
 ### Error Handling
 
 ```typescript
@@ -1102,7 +1129,26 @@ pai chat "What files are in the current directory?" --provider openai --model gp
 
 The LLM will use `bash_exec` to run `ls` and return the results.
 
-**Security Note:** bash_exec has no security restrictions. The LLM can execute any command. Use with caution.
+**Parameters:**
+
+| Param | Required | Description |
+|-------|----------|-------------|
+| `command` | yes | The shell command to run (full bash syntax). |
+| `comment` | yes | Short briefing on why/how, for the audit trail. |
+| `cwd` | no | Working directory. Also used to resolve relative paths for the path policy. |
+| `timeout_seconds` | no | Per-call timeout. Default 60, max 3600. |
+| `max_stdout_bytes` | no | Max stdout bytes returned inline. Unset → 64KB default; `0` suppresses stdout (still spilled). Clamped to a 256KB hard ceiling. |
+| `max_stderr_bytes` | no | Max stderr bytes returned inline. Same semantics as `max_stdout_bytes`. |
+
+**Output truncation + spill:** Output above the per-stream budget (default ~64KB) is replaced with a head+tail summary; the captured output is written to a temp spill file whose path is returned in `result.output.stdoutSpillPath` / `stderrSpillPath`. The LLM is told to `grep`/`sed`/`head` that file instead of re-running the command. Self-bounded reads (`head -n N`, `tail -c N`, `sed -n '1,800p'`, `grep -m N`, `… | head -N`) automatically get a budget sized to the request (up to the 256KB ceiling), so they are not clipped to the small default.
+
+**Danger detection (AST-based):** Each command is parsed into a bash AST before running. Never-legitimate, irreversible commands are **refused before spawning** (`rm -rf /`, `rm -rf ~`, deleting system dirs, `mkfs`, writing a raw disk device, fork bombs). Risky-but-legitimate commands run normally but are flagged in `result.violations` (`git reset --hard`, `git clean -fd`, `find -delete`, `curl … | bash`, outbound uploads). Detection fails open — anything unparseable or with unresolved targets is allowed.
+
+**Path policy (optional, app-injected):** The host application can inject a `pathPolicy` (via `createBashExecTool({ dangerDetection: { pathPolicy } })`) that maps each command's `(operation, target)` pairs — read / write / create / overwrite / delete — to `allow` / `warn` / `deny` per path pattern, with a default verdict. This layers on top of the built-in presets (catastrophic denies always win).
+
+**Subprocess priority:** Spawned processes are run at lowered priority by default so the host's interactive work always wins CPU contention (`lowerPriority: false` to disable).
+
+> **Security note:** These mechanisms target a single-owner, non-adversarial setup. They are precision/safety nets (make mistakes recoverable and visible), **not** an adversarial sandbox — a determined command can still evade AST analysis. Do not rely on `bash_exec` as an isolation boundary for untrusted input.
 
 ## Output Modes
 

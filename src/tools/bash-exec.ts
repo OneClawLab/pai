@@ -216,6 +216,12 @@ export function createBashExecTool(options?: BashExecToolOptions): Tool {
       ? null
       : { ...DEFAULT_OUTPUT_CAP, ...(outputCap ?? {}) };
 
+  // KB figures surfaced in the arg schema so the descriptions always match the
+  // tool's actual configuration (defaults to 64KB budget / 256KB ceiling).
+  const effectiveCap = cap ?? DEFAULT_OUTPUT_CAP;
+  const defaultBudgetKB = Math.round(effectiveCap.defaultReturnBytes / 1024);
+  const ceilingKB = Math.round(effectiveCap.hardCeilingBytes / 1024);
+
   return {
     name: 'bash_exec',
     description,
@@ -242,11 +248,15 @@ export function createBashExecTool(options?: BashExecToolOptions): Tool {
         max_stdout_bytes: {
           type: 'number',
           description:
-            'Optional. Max bytes of stdout to return inline (0 suppresses it; still spilled to file). Use a larger value when you intentionally need a lot at once. Clamped to ~256KB.',
+            `Optional. Max bytes of stdout returned inline. Unset → default ${defaultBudgetKB}KB ` +
+            `(self-bounded reads like 'head -n N' auto-raise it). 0 suppresses stdout (still spilled to file). ` +
+            `Clamped to a ${ceilingKB}KB hard ceiling. Set higher when you intentionally need a lot at once.`,
         },
         max_stderr_bytes: {
           type: 'number',
-          description: 'Optional. Max bytes of stderr to return inline (0 suppresses it). Clamped to ~256KB.',
+          description:
+            `Optional. Max bytes of stderr returned inline. Unset → default ${defaultBudgetKB}KB. ` +
+            `0 suppresses stderr (still spilled). Clamped to a ${ceilingKB}KB hard ceiling.`,
         },
       },
       required: ['command', 'comment'],
