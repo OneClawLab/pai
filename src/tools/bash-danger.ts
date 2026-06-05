@@ -30,6 +30,7 @@
 import parse from 'bash-parser'
 import { homedir } from 'node:os'
 import { path } from '../repo-utils/path.js'
+import { checkPathPolicy, type PathPolicy } from './bash-path-policy.js'
 
 export type DangerSeverity = 'deny' | 'warn'
 
@@ -98,6 +99,12 @@ export interface DangerDetectionOptions {
   disabledCodes?: string[]
   /** Custom rules appended to the preset set. */
   extraRules?: DangerRule[]
+  /**
+   * App-injected, path-scoped access policy. Evaluated on top of the preset
+   * rules: maps each command's (operation, target) pairs to allow/warn/deny.
+   * See bash-path-policy.ts.
+   */
+  pathPolicy?: PathPolicy
 }
 
 export interface DetectResult {
@@ -573,10 +580,14 @@ function runTextRules(command: string, disabled: Set<string>): Violation[] {
  * Never throws. On parse failure returns `{ parseOk: false, violations: [],
  * blocked: false }` — detection is skipped (fail-open) and the command is
  * allowed to run.
+ *
+ * @param cwd Working directory used to resolve relative paths for the optional
+ *            path policy. Defaults to process.cwd() when omitted.
  */
 export function detectDangers(
   command: string,
   options?: DangerDetectionOptions,
+  cwd?: string,
 ): DetectResult {
   const enabled = options?.enabled ?? true
   if (!enabled || !command.trim()) {
@@ -585,6 +596,7 @@ export function detectDangers(
 
   const disabled = new Set(options?.disabledCodes ?? [])
   const warnOnly = options?.mode === 'warn-only'
+  const homeDir = path.toPosixPath(homedir())
 
   // Text-level rules run regardless of parse success (catch bashisms that the
   // parser cannot model, e.g. process substitution).
@@ -602,6 +614,7 @@ export function detectDangers(
   }
 
   const ctx = buildContext(command, ast)
+  ctx.homeDir = homeDir
   const rules = [...PRESET_RULES, ...(options?.extraRules ?? [])].filter(
     (r) => !disabled.has(r.code),
   )
@@ -626,6 +639,20 @@ export function detectDangers(
   }
   // Append text-level findings not already produced by an AST rule.
   for (const v of textViolations) add(v)
+
+  // App-injected path policy, layered on top of the presets.
+  if (options?.pathPolicy && !disabled.has('PATH_POLICY')) {
+    try {
+      const policyViolations = checkPathPolicy(ctx.commands, {
+        policy: options.pathPolicy,
+        homeDir,
+        ...(cwd !== undefined ? { cwd } : {}),
+      })
+      for (const v of policyViolations) add(v)
+    } catch {
+      // Policy evaluation must never break execution.
+    }
+  }
 
   const blocked = violations.some((v) => v.severity === 'deny')
   return { parseOk: true, violations, blocked }

@@ -19,6 +19,8 @@ export {
 export type { OutputCapConfig, ProcessedStream, CapturedStream } from './tools/bash-output.js';
 export { analyzeOutputIntent } from './tools/bash-output-intent.js';
 export type { OutputIntent } from './tools/bash-output-intent.js';
+export { checkPathPolicy, extractFileOps, resolveTarget, matchPattern } from './tools/bash-path-policy.js';
+export type { PathPolicy, PathPolicyRule, PathAccess, FileOp } from './tools/bash-path-policy.js';
 export { createFileWriteTool } from './tools/file-write.js';
 export type { FileWriteArgs, FileWriteResult } from './tools/file-write.js';
 export { initPai } from './lib/pai-instance.js';

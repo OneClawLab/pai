@@ -264,7 +264,7 @@ export function createBashExecTool(options?: BashExecToolOptions): Tool {
       // Parse the command into an AST and run preset rules. Catastrophic,
       // never-legitimate commands are blocked before any process is spawned;
       // risky-but-legitimate commands are annotated and allowed to run.
-      const danger = detectDangers(args.command, dangerDetection);
+      const danger = detectDangers(args.command, dangerDetection, args.cwd);
       if (danger.blocked) {
         const denied = danger.violations.filter((v) => v.severity === 'deny');
         const msg = denied.map((v) => `[blocked: ${v.code}] ${v.message}`).join('\n');

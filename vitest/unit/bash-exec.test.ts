@@ -535,5 +535,57 @@ describe('bash_exec tool', () => {
       expect(result.stdout).toContain('noprio');
     });
   });
+
+  describe('path policy (integration)', () => {
+    it('blocks a write outside the allowed root before spawning', async () => {
+      const tempDir = await mkdtemp(join(tmpdir(), 'pai-policy-'));
+      try {
+        const allowed = tempDir.replace(/\\/g, '/').replace(/^([A-Za-z]):/, (_, d: string) => `/${d.toLowerCase()}`);
+        const t = createBashExecTool({
+          dangerDetection: {
+            pathPolicy: {
+              rules: [{ pattern: `${allowed}/work`, allow: ['read', 'write', 'create', 'overwrite', 'delete'] }],
+              default: 'deny',
+            },
+          },
+        });
+        const result = await t.handler({
+          command: `echo hi > ${allowed}/outside.txt`,
+          comment: 'should be denied',
+        });
+        expect(result.exitCode).toBe(1);
+        expect(result.stderr).toContain('blocked');
+        expect(result.violations?.some((v: { code: string }) => v.code.startsWith('PATH_POLICY'))).toBe(true);
+      } finally {
+        if (isWin32) await new Promise((r) => setTimeout(r, 100));
+        await rm(tempDir, { recursive: true, force: true });
+      }
+    });
+
+    it('allows a write inside the allowed root', async () => {
+      const tempDir = await mkdtemp(join(tmpdir(), 'pai-policy-'));
+      try {
+        const allowed = tempDir.replace(/\\/g, '/').replace(/^([A-Za-z]):/, (_, d: string) => `/${d.toLowerCase()}`);
+        const t = createBashExecTool({
+          dangerDetection: {
+            pathPolicy: {
+              rules: [{ pattern: allowed, allow: ['read', 'write', 'create', 'overwrite', 'delete'] }],
+              default: 'deny',
+            },
+          },
+        });
+        const result = await t.handler({
+          command: `echo hi > ${allowed}/inside.txt && cat ${allowed}/inside.txt`,
+          comment: 'allowed',
+        });
+        expect(result.exitCode).toBe(0);
+        expect(result.stdout).toContain('hi');
+      } finally {
+        if (isWin32) await new Promise((r) => setTimeout(r, 100));
+        await rm(tempDir, { recursive: true, force: true });
+      }
+    });
+  });
 });
+
 
