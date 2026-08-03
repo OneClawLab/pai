@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { validateModelId, getRegistryModels, resolveModel } from '../../src/model-resolver.js'
+import { validateModelId, getRegistryModels, resolveModel } from '../../src/lib/model-resolver.js'
 import type { ProviderConfig } from '../../src/types.js'
 
 // Mock pi-ai so tests don't need real network

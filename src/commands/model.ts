@@ -4,7 +4,7 @@ import { createInterface } from 'node:readline';
 import type { ModelConfigOptions } from '../types.js';
 import { PAIError } from '../types.js';
 import { ConfigurationManager } from '../config-manager.js';
-import { resolveModel, getRegistryModels, validateModelId } from '../model-resolver.js';
+import { resolveModel, getRegistryModels, validateModelId } from '../lib/model-resolver.js';
 
 /**
  * Coerce a --set value string to its appropriate JS type.
