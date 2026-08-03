@@ -5,7 +5,7 @@ import { mkdtemp, rm, writeFile, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
-vi.mock('@earendil-works/pi-ai/compat', () => ({
+vi.mock('../../src/pi-ai.js', () => ({
   getModel: vi.fn(() => ({
     id: 'test-model',
     name: 'Test Model',
@@ -93,7 +93,7 @@ describe('Integration Tests', () => {
       };
       await writeFile(configPath, JSON.stringify(config), 'utf-8');
 
-      const { complete } = await import('@earendil-works/pi-ai/compat');
+      const { complete } = await import('../../src/pi-ai.js');
 
       await handleChatCommand('Hello', {
         config: configPath,
@@ -117,7 +117,7 @@ describe('Integration Tests', () => {
       const systemFile = join(tempDir, 'system.txt');
       await writeFile(systemFile, 'System from file', 'utf-8');
 
-      const { complete } = await import('@earendil-works/pi-ai/compat');
+      const { complete } = await import('../../src/pi-ai.js');
 
       await handleChatCommand('Hello', {
         config: configPath,
@@ -224,7 +224,7 @@ describe('Integration Tests', () => {
       };
       await writeFile(configPath, JSON.stringify(config), 'utf-8');
 
-      const { stream } = await import('@earendil-works/pi-ai/compat');
+      const { stream } = await import('../../src/pi-ai.js');
       const mockStream = {
         [Symbol.asyncIterator]: async function* () {
           yield { type: 'text_delta', delta: 'Hello' };
@@ -261,7 +261,7 @@ describe('Integration Tests', () => {
       };
       await writeFile(configPath, JSON.stringify(config), 'utf-8');
 
-      const { complete } = await import('@earendil-works/pi-ai/compat');
+      const { complete } = await import('../../src/pi-ai.js');
       let callCount = 0;
       vi.mocked(complete).mockImplementation(async () => {
         callCount++;
@@ -371,7 +371,7 @@ describe('Integration Tests', () => {
       await writeFile(configPath, JSON.stringify(config), 'utf-8');
 
       // Mock getModels to return empty so no fallback model is found
-      const piAi = await import('@earendil-works/pi-ai/compat');
+      const piAi = await import('../../src/pi-ai.js');
       const getModelsMock = vi.mocked(piAi.getModels);
       getModelsMock.mockReturnValueOnce([]);
 
@@ -581,7 +581,7 @@ describe('Integration Tests', () => {
       };
       await writeFile(configPath, JSON.stringify(config), 'utf-8');
 
-      const { complete } = await import('@earendil-works/pi-ai/compat');
+      const { complete } = await import('../../src/pi-ai.js');
       let callCount = 0;
       vi.mocked(complete).mockImplementation(async () => {
         callCount++;
@@ -634,7 +634,7 @@ describe('Integration Tests', () => {
       };
       await writeFile(configPath, JSON.stringify(config), 'utf-8');
 
-      const { complete } = await import('@earendil-works/pi-ai/compat');
+      const { complete } = await import('../../src/pi-ai.js');
       // Always return tool calls — should stop after maxTurns
       vi.mocked(complete).mockImplementation(async () => ({
         role: 'assistant',
@@ -661,7 +661,7 @@ describe('Integration Tests', () => {
       };
       await writeFile(configPath, JSON.stringify(config), 'utf-8');
 
-      const { complete } = await import('@earendil-works/pi-ai/compat');
+      const { complete } = await import('../../src/pi-ai.js');
       let callCount = 0;
       vi.mocked(complete).mockImplementation(async (_model: any, context: any) => {
         callCount++;
@@ -708,7 +708,7 @@ describe('Integration Tests', () => {
       const sessionPath = join(tempDir, 'session-append.jsonl');
 
       // Reset complete mock to default behavior
-      const { complete } = await import('@earendil-works/pi-ai/compat');
+      const { complete } = await import('../../src/pi-ai.js');
       vi.mocked(complete).mockImplementation(async () => ({
         role: 'assistant',
         content: [{ type: 'text', text: 'Reply' }],
@@ -768,7 +768,7 @@ describe('Integration Tests', () => {
       const imagePath = join(tempDir, 'test.png');
       await writeFile(imagePath, pngHeader);
 
-      const { complete } = await import('@earendil-works/pi-ai/compat');
+      const { complete } = await import('../../src/pi-ai.js');
       vi.mocked(complete).mockImplementation(async (_model: any, context: any) => {
         // Verify the user message contains multimodal content
         const userMsg = context.messages.find((m: any) => m.role === 'user');
@@ -848,7 +848,7 @@ describe('Integration Tests', () => {
       };
       await writeFile(configPath, JSON.stringify(config), 'utf-8');
 
-      const { complete } = await import('@earendil-works/pi-ai/compat');
+      const { complete } = await import('../../src/pi-ai.js');
       vi.mocked(complete).mockClear();
 
       await handleChatCommand('Hello', {

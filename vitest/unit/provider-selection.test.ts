@@ -5,7 +5,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
-vi.mock('@earendil-works/pi-ai/compat', () => ({
+vi.mock('../../src/pi-ai.js', () => ({
   getModel: vi.fn(() => ({
     id: 'test-model',
     name: 'Test Model',
@@ -62,7 +62,7 @@ describe('Provider and Model Selection', () => {
       };
       await writeFile(configPath, JSON.stringify(config), 'utf-8');
 
-      const { complete } = await import('@earendil-works/pi-ai/compat');
+      const { complete } = await import('../../src/pi-ai.js');
 
       await handleChatCommand('Hello', {
         config: configPath,
@@ -108,7 +108,7 @@ describe('Provider and Model Selection', () => {
       };
       await writeFile(configPath, JSON.stringify(config), 'utf-8');
 
-      const { complete } = await import('@earendil-works/pi-ai/compat');
+      const { complete } = await import('../../src/pi-ai.js');
 
       await handleChatCommand('Hello', { config: configPath });
 
@@ -142,7 +142,7 @@ describe('Provider and Model Selection', () => {
       };
       await writeFile(configPath, JSON.stringify(config), 'utf-8');
 
-      const { complete } = await import('@earendil-works/pi-ai/compat');
+      const { complete } = await import('../../src/pi-ai.js');
 
       await handleChatCommand('Hello', {
         config: configPath,
@@ -163,7 +163,7 @@ describe('Provider and Model Selection', () => {
       };
       await writeFile(configPath, JSON.stringify(config), 'utf-8');
 
-      const { complete } = await import('@earendil-works/pi-ai/compat');
+      const { complete } = await import('../../src/pi-ai.js');
 
       await handleChatCommand('Hello', {
         config: configPath,
@@ -184,7 +184,7 @@ describe('Provider and Model Selection', () => {
       };
       await writeFile(configPath, JSON.stringify(config), 'utf-8');
 
-      const { complete } = await import('@earendil-works/pi-ai/compat');
+      const { complete } = await import('../../src/pi-ai.js');
 
       await handleChatCommand('Hello', { config: configPath });
 
@@ -203,7 +203,7 @@ describe('Provider and Model Selection', () => {
       };
       await writeFile(configPath, JSON.stringify(config), 'utf-8');
 
-      const { complete } = await import('@earendil-works/pi-ai/compat');
+      const { complete } = await import('../../src/pi-ai.js');
 
       await handleChatCommand('Hello', {
         config: configPath,
@@ -228,7 +228,7 @@ describe('Provider and Model Selection', () => {
       };
       await writeFile(configPath, JSON.stringify(config), 'utf-8');
 
-      const { complete } = await import('@earendil-works/pi-ai/compat');
+      const { complete } = await import('../../src/pi-ai.js');
 
       await handleChatCommand('Hello', {
         config: configPath,
@@ -249,7 +249,7 @@ describe('Provider and Model Selection', () => {
       };
       await writeFile(configPath, JSON.stringify(config), 'utf-8');
 
-      const { complete } = await import('@earendil-works/pi-ai/compat');
+      const { complete } = await import('../../src/pi-ai.js');
 
       await handleChatCommand('Hello', { config: configPath });
 
@@ -265,7 +265,7 @@ describe('Provider and Model Selection', () => {
       };
       await writeFile(configPath, JSON.stringify(config), 'utf-8');
 
-      const { complete } = await import('@earendil-works/pi-ai/compat');
+      const { complete } = await import('../../src/pi-ai.js');
 
       await handleChatCommand('Hello', { config: configPath });
 

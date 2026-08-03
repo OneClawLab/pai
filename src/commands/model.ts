@@ -1,4 +1,4 @@
-import { getProviders, getModels } from '@earendil-works/pi-ai/compat';
+import { getProviders, getModels } from '../pi-ai.js';
 import { getOAuthProvider, getOAuthProviders } from '../oauth-provider.js';
 import { createInterface } from 'node:readline';
 import type { ModelConfigOptions } from '../types.js';

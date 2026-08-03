@@ -3,7 +3,7 @@ import { LLMClient } from '../../src/llm-client.js';
 import type { Message, Tool, LLMResponse } from '../../src/types.js';
 
 // Mock pi-ai module
-vi.mock('@earendil-works/pi-ai/compat', () => ({
+vi.mock('../../src/pi-ai.js', () => ({
   getModel: vi.fn(() => ({
     id: 'test-model',
     name: 'Test Model',
@@ -36,7 +36,7 @@ describe('LLMClient', () => {
 
   describe('constructor and buildModel', () => {
     it('should create client with config and use getModel for known providers', async () => {
-      const { getModel } = await import('@earendil-works/pi-ai/compat');
+      const { getModel } = await import('../../src/pi-ai.js');
       // getModel was called during LLMClient construction in beforeEach
       expect(vi.mocked(getModel)).toHaveBeenCalledWith('test', 'test-model');
       expect(client.getModel()).toBeDefined();
@@ -65,7 +65,7 @@ describe('LLMClient', () => {
     });
 
     it('should fall back to openai-completions when getModel throws', async () => {
-      const { getModel } = await import('@earendil-works/pi-ai/compat');
+      const { getModel } = await import('../../src/pi-ai.js');
       vi.mocked(getModel).mockImplementationOnce(() => { throw new Error('Unknown model'); });
 
       const fallbackClient = new LLMClient({
@@ -80,7 +80,7 @@ describe('LLMClient', () => {
     });
 
     it('should pass providerOptions through buildOptions', async () => {
-      const { complete } = await import('@earendil-works/pi-ai/compat');
+      const { complete } = await import('../../src/pi-ai.js');
       vi.mocked(complete).mockResolvedValue({
         role: 'assistant',
         content: [{ type: 'text', text: 'OK' }],
@@ -110,7 +110,7 @@ describe('LLMClient', () => {
 
   describe('message conversion (buildContext)', () => {
     it('should extract system prompt from first message', async () => {
-      const { complete } = await import('@earendil-works/pi-ai/compat');
+      const { complete } = await import('../../src/pi-ai.js');
       vi.mocked(complete).mockResolvedValue({
         role: 'assistant',
         content: [{ type: 'text', text: 'OK' }],
@@ -134,7 +134,7 @@ describe('LLMClient', () => {
     });
 
     it('should convert tool messages to toolResult format', async () => {
-      const { complete } = await import('@earendil-works/pi-ai/compat');
+      const { complete } = await import('../../src/pi-ai.js');
       vi.mocked(complete).mockResolvedValue({
         role: 'assistant',
         content: [{ type: 'text', text: 'OK' }],
@@ -169,7 +169,7 @@ describe('LLMClient', () => {
     });
 
     it('should convert assistant messages with tool_calls to content blocks', async () => {
-      const { complete } = await import('@earendil-works/pi-ai/compat');
+      const { complete } = await import('../../src/pi-ai.js');
       vi.mocked(complete).mockResolvedValue({
         role: 'assistant',
         content: [{ type: 'text', text: 'Done' }],
@@ -203,7 +203,7 @@ describe('LLMClient', () => {
     });
 
     it('should pass tools to pi-ai context', async () => {
-      const { complete } = await import('@earendil-works/pi-ai/compat');
+      const { complete } = await import('../../src/pi-ai.js');
       vi.mocked(complete).mockResolvedValue({
         role: 'assistant',
         content: [{ type: 'text', text: 'OK' }],
@@ -233,7 +233,7 @@ describe('LLMClient', () => {
     });
 
     it('should handle multimodal user content', async () => {
-      const { complete } = await import('@earendil-works/pi-ai/compat');
+      const { complete } = await import('../../src/pi-ai.js');
       vi.mocked(complete).mockResolvedValue({
         role: 'assistant',
         content: [{ type: 'text', text: 'OK' }],
@@ -264,7 +264,7 @@ describe('LLMClient', () => {
 
   describe('chatComplete response parsing', () => {
     it('should extract text content from response', async () => {
-      const { complete } = await import('@earendil-works/pi-ai/compat');
+      const { complete } = await import('../../src/pi-ai.js');
       vi.mocked(complete).mockResolvedValue({
         role: 'assistant',
         content: [{ type: 'text', text: 'Hello, world!' }],
@@ -281,7 +281,7 @@ describe('LLMClient', () => {
     });
 
     it('should extract tool calls from response', async () => {
-      const { complete } = await import('@earendil-works/pi-ai/compat');
+      const { complete } = await import('../../src/pi-ai.js');
       vi.mocked(complete).mockResolvedValue({
         role: 'assistant',
         content: [
@@ -304,7 +304,7 @@ describe('LLMClient', () => {
     });
 
     it('should concatenate multiple text blocks', async () => {
-      const { complete } = await import('@earendil-works/pi-ai/compat');
+      const { complete } = await import('../../src/pi-ai.js');
       vi.mocked(complete).mockResolvedValue({
         role: 'assistant',
         content: [
@@ -323,7 +323,7 @@ describe('LLMClient', () => {
 
   describe('chat (streaming)', () => {
     it('should yield streaming text deltas then final response', async () => {
-      const { stream } = await import('@earendil-works/pi-ai/compat');
+      const { stream } = await import('../../src/pi-ai.js');
 
       const mockStream = {
         [Symbol.asyncIterator]: async function* () {
@@ -351,7 +351,7 @@ describe('LLMClient', () => {
     });
 
     it('should handle tool calls in streaming', async () => {
-      const { stream } = await import('@earendil-works/pi-ai/compat');
+      const { stream } = await import('../../src/pi-ai.js');
 
       const mockStream = {
         [Symbol.asyncIterator]: async function* () {
@@ -377,7 +377,7 @@ describe('LLMClient', () => {
     });
 
     it('should throw on stream error event', async () => {
-      const { stream } = await import('@earendil-works/pi-ai/compat');
+      const { stream } = await import('../../src/pi-ai.js');
 
       const mockStream = {
         [Symbol.asyncIterator]: async function* () {
