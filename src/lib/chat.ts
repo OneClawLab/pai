@@ -87,6 +87,7 @@ export async function* chat(
       if (config.stream) {
         // Streaming mode
         let fullContent = '';
+        let providerContent: unknown;
 
         for await (const response of llmClient.chat(messagesForCall, tools, signal)) {
           if (response.finishReason === 'streaming') {
@@ -102,12 +103,14 @@ export async function* chat(
             if (response.toolCalls) {
               toolCallsCollected.push(...response.toolCalls);
             }
+            if (response.providerContent) providerContent = response.providerContent;
           }
         }
 
         const streamMsg: Message & { tool_calls?: typeof toolCallsCollected } =
           { role: 'assistant', content: fullContent };
         if (toolCallsCollected.length > 0) streamMsg.tool_calls = toolCallsCollected;
+        if (providerContent) streamMsg.providerContent = providerContent;
         assistantMessage = streamMsg;
       } else {
         // Non-streaming mode
@@ -126,6 +129,7 @@ export async function* chat(
         const nonStreamMsg: Message & { tool_calls?: typeof toolCallsCollected } =
           { role: 'assistant', content: response.content };
         if (toolCallsCollected.length > 0) nonStreamMsg.tool_calls = toolCallsCollected;
+        if (response.providerContent) nonStreamMsg.providerContent = response.providerContent;
         assistantMessage = nonStreamMsg;
       }
 

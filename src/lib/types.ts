@@ -62,6 +62,14 @@ export interface Message {
   tool_call_id?: string; // For tool responses
   timestamp?: string | null; // ISO8601 timestamp
   id?: string; // Optional message ID
+  /**
+   * pi-ai native assistant content blocks (text/thinking/toolCall) with signatures.
+   * Preserved verbatim so reasoning models (e.g. azure-openai-responses) can
+   * round-trip the required reasoning item across multi-turn tool calls.
+   * Set on assistant messages produced by the chat loop; JSON-serializable
+   * (thinkingSignature is an opaque string) so it survives session persistence.
+   */
+  providerContent?: unknown;
 }
 
 // ============================================================================
@@ -128,6 +136,8 @@ export interface LLMResponse {
     output: number;
     cost?: { total: number };
   };
+  /** pi-ai native content blocks from the completed turn (text/thinking/toolCall + signatures). */
+  providerContent?: unknown;
 }
 
 // ============================================================================

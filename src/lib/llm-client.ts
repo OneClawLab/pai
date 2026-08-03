@@ -102,6 +102,11 @@ export class LLMClient {
           if (currentToolCalls.length > 0) {
             doneResponse.toolCalls = currentToolCalls;
           }
+          // Preserve pi-ai native content blocks (thinking + signatures) for multi-turn round-trip.
+          const nativeContent = (event as any).message?.content;
+          if (Array.isArray(nativeContent) && nativeContent.length > 0) {
+            doneResponse.providerContent = nativeContent;
+          }
           yield doneResponse;
           break;
         }
@@ -151,6 +156,10 @@ export class LLMClient {
     };
     if (toolCalls.length > 0) {
       response.toolCalls = toolCalls;
+    }
+    // Preserve pi-ai native content blocks (thinking + signatures) for multi-turn round-trip.
+    if (Array.isArray(result.content) && result.content.length > 0) {
+      response.providerContent = result.content;
     }
 
     return response;
@@ -252,6 +261,22 @@ export class LLMClient {
    * pi-ai expects assistant messages with content as an array of typed blocks.
    */
   private buildAssistantMessage(msg: Message) {
+    // Prefer pi-ai native content blocks when available — preserves thinking
+    // blocks + signatures required by reasoning models (azure-openai-responses)
+    // to round-trip the reasoning item alongside function_call across turns.
+    const native = (msg as { providerContent?: unknown }).providerContent;
+    if (Array.isArray(native) && native.length > 0) {
+      return {
+        role: 'assistant' as const,
+        content: native,
+        api: this.model.api,
+        provider: this.model.provider,
+        model: this.model.id,
+        usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },
+        stopReason: (native.some((b: any) => b?.type === 'toolCall') ? 'toolUse' : 'stop') as 'toolUse' | 'stop',
+        timestamp: Date.now(),
+      };
+    }
     const contentBlocks: any[] = [];
     const textContent = typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content);
     if (textContent) {
