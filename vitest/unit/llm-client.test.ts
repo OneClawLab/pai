@@ -106,6 +106,74 @@ describe('LLMClient', () => {
       expect(options.azureDeploymentName).toBe('gpt-4.1');
       expect(options.apiKey).toBe('key');
     });
+
+    it('should default reasoningEffort to medium for reasoning models', async () => {
+      const { complete } = await import('../../src/pi-ai.js');
+      vi.mocked(complete).mockResolvedValue({
+        role: 'assistant',
+        content: [{ type: 'text', text: 'OK' }],
+        stopReason: 'stop',
+        usage: { input: 10, output: 5, cost: { total: 0 } },
+        timestamp: Date.now(),
+      } as any);
+
+      const reasoningClient = new LLMClient({
+        provider: 'azure',
+        model: 'gpt-5.5',
+        apiKey: 'key',
+        api: 'azure-openai-responses',
+        reasoning: true,
+      });
+
+      await reasoningClient.chatComplete([{ role: 'user', content: 'test' }]);
+
+      const options = vi.mocked(complete).mock.calls[0]?.[2] as any;
+      // Ensures pi-ai requests include:["reasoning.encrypted_content"], required for
+      // store:false multi-turn reasoning replay.
+      expect(options.reasoningEffort).toBe('medium');
+    });
+
+    it('should not override an explicit reasoningEffort from providerOptions', async () => {
+      const { complete } = await import('../../src/pi-ai.js');
+      vi.mocked(complete).mockResolvedValue({
+        role: 'assistant',
+        content: [{ type: 'text', text: 'OK' }],
+        stopReason: 'stop',
+        usage: { input: 10, output: 5, cost: { total: 0 } },
+        timestamp: Date.now(),
+      } as any);
+
+      const reasoningClient = new LLMClient({
+        provider: 'azure',
+        model: 'gpt-5.5',
+        apiKey: 'key',
+        api: 'azure-openai-responses',
+        reasoning: true,
+        providerOptions: { reasoningEffort: 'high' },
+      });
+
+      await reasoningClient.chatComplete([{ role: 'user', content: 'test' }]);
+
+      const options = vi.mocked(complete).mock.calls[0]?.[2] as any;
+      expect(options.reasoningEffort).toBe('high');
+    });
+
+    it('should not set reasoningEffort for non-reasoning models', async () => {
+      const { complete } = await import('../../src/pi-ai.js');
+      vi.mocked(complete).mockResolvedValue({
+        role: 'assistant',
+        content: [{ type: 'text', text: 'OK' }],
+        stopReason: 'stop',
+        usage: { input: 10, output: 5, cost: { total: 0 } },
+        timestamp: Date.now(),
+      } as any);
+
+      // client from beforeEach has no reasoning flag
+      await client.chatComplete([{ role: 'user', content: 'test' }]);
+
+      const options = vi.mocked(complete).mock.calls[0]?.[2] as any;
+      expect(options.reasoningEffort).toBeUndefined();
+    });
   });
 
   describe('message conversion (buildContext)', () => {

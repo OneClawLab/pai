@@ -343,6 +343,20 @@ export class LLMClient {
       Object.assign(options, this.config.providerOptions);
     }
 
+    // Reasoning models on the OpenAI/Azure Responses API run with store:false, so a
+    // multi-turn tool call must replay the reasoning item's encrypted_content inline
+    // (sending only the rs_ id fails: the item was never persisted server-side).
+    // pi-ai only requests include:["reasoning.encrypted_content"] when a reasoning
+    // effort (or summary) is set. Default an effort for reasoning models so they work
+    // across turns out of the box; callers can still override via providerOptions.
+    if (
+      this.config.reasoning &&
+      options.reasoningEffort === undefined &&
+      options.reasoningSummary === undefined
+    ) {
+      options.reasoningEffort = 'medium';
+    }
+
     return options;
   }
 
