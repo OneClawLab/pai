@@ -1,4 +1,5 @@
-import { getModel, stream, complete, type Model, type Api } from '@mariozechner/pi-ai';
+import { getModel, stream, complete } from '@earendil-works/pi-ai/compat';
+import type { Model, Api } from '@earendil-works/pi-ai';
 import type { LLMClientConfig, Message, Tool, ToolCall, LLMResponse } from './types.js';
 
 /**

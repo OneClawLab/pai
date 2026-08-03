@@ -375,10 +375,10 @@ export class ConfigurationManager {
     if (oauth.expires && Date.now() >= oauth.expires) {
       // Try to refresh the token
       try {
-        const { getOAuthProvider } = await import('@mariozechner/pi-ai/oauth');
+        const { getOAuthProvider } = await import('./oauth-provider.js');
         const oauthProvider = getOAuthProvider(providerConfig.name);
         if (oauthProvider) {
-          const newCredentials = await oauthProvider.refreshToken(oauth as any);
+          const newCredentials = await oauthProvider.refreshToken(oauth);
           // Update config with refreshed credentials
           providerConfig.oauth = {
             ...oauth,
@@ -387,7 +387,7 @@ export class ConfigurationManager {
             expires: newCredentials.expires,
           };
           await this.addProvider(providerConfig);
-          return oauthProvider.getApiKey(providerConfig.oauth as any);
+          return (await oauthProvider.getApiKey(providerConfig.oauth)) ?? providerConfig.oauth.access;
         }
       } catch {
         // Refresh failed, return existing token (may still work)
@@ -396,10 +396,10 @@ export class ConfigurationManager {
 
     // Use getApiKey if available (some providers encode extra fields)
     try {
-      const { getOAuthProvider } = await import('@mariozechner/pi-ai/oauth');
+      const { getOAuthProvider } = await import('./oauth-provider.js');
       const oauthProvider = getOAuthProvider(providerConfig.name);
       if (oauthProvider) {
-        return oauthProvider.getApiKey(oauth as any);
+        return (await oauthProvider.getApiKey(oauth)) ?? oauth.access;
       }
     } catch {
       // Fall back to raw access token

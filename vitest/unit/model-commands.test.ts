@@ -5,8 +5,8 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import * as fc from 'fast-check';
 
-// Mock @mariozechner/pi-ai/oauth for OAuth login tests
-vi.mock('@mariozechner/pi-ai/oauth', () => ({
+// Mock ../../src/oauth-provider.js for OAuth login tests
+vi.mock('../../src/oauth-provider.js', () => ({
   getOAuthProviders: vi.fn(),
   getOAuthProvider: vi.fn(),
 }));
@@ -590,7 +590,7 @@ describe('Model Commands', () => {
     let mockGetOAuthProviders: any;
 
     beforeEach(async () => {
-      const oauthModule = await import('@mariozechner/pi-ai/oauth');
+      const oauthModule = await import('../../src/oauth-provider.js');
       mockGetOAuthProvider = vi.mocked(oauthModule.getOAuthProvider);
       mockGetOAuthProviders = vi.mocked(oauthModule.getOAuthProviders);
     });
@@ -749,7 +749,7 @@ describe('Model Commands', () => {
       await writeFile(configPath, JSON.stringify(config), 'utf-8');
 
       // Mock getOAuthProvider to return a provider with getApiKey
-      const oauthModule = await import('@mariozechner/pi-ai/oauth');
+      const oauthModule = await import('../../src/oauth-provider.js');
       vi.mocked(oauthModule.getOAuthProvider).mockReturnValue({
         name: 'GitHub Copilot',
         getApiKey: vi.fn().mockReturnValue('derived-api-key'),
@@ -777,7 +777,7 @@ describe('Model Commands', () => {
       };
       await writeFile(configPath, JSON.stringify(config), 'utf-8');
 
-      const oauthModule = await import('@mariozechner/pi-ai/oauth');
+      const oauthModule = await import('../../src/oauth-provider.js');
       vi.mocked(oauthModule.getOAuthProvider).mockReturnValue({
         name: 'GitHub Copilot',
         refreshToken: vi.fn().mockResolvedValue({
@@ -817,7 +817,7 @@ describe('Model Commands', () => {
       await writeFile(configPath, JSON.stringify(config), 'utf-8');
 
       // getOAuthProvider returns null — no provider-specific logic
-      const oauthModule = await import('@mariozechner/pi-ai/oauth');
+      const oauthModule = await import('../../src/oauth-provider.js');
       vi.mocked(oauthModule.getOAuthProvider).mockReturnValue(undefined as any);
 
       const cm = new ConfigurationManager({ config: configPath });

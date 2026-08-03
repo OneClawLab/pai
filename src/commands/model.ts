@@ -1,5 +1,5 @@
-import { getProviders, getModels } from '@mariozechner/pi-ai';
-import { getOAuthProvider, getOAuthProviders } from '@mariozechner/pi-ai/oauth';
+import { getProviders, getModels } from '@earendil-works/pi-ai/compat';
+import { getOAuthProvider, getOAuthProviders } from '../oauth-provider.js';
 import { createInterface } from 'node:readline';
 import type { ModelConfigOptions } from '../types.js';
 import { PAIError } from '../types.js';
@@ -46,7 +46,7 @@ export async function handleModelList(options: ModelConfigOptions): Promise<void
 
     if (options.all) {
       // List all supported providers
-      const allProviders = getProviders();
+      const allProviders: string[] = getProviders();
       // Add custom local provider 'dashscope' for Dashscope (阿里百炼) support
       if (!allProviders.includes('dashscope')) allProviders.push('dashscope');
       
@@ -207,7 +207,7 @@ export async function handleModelConfig(options: ModelConfigOptions): Promise<vo
       }
 
       // Validate provider is supported
-      const supportedProviders = getProviders();
+      const supportedProviders: string[] = getProviders();
       // Accept 'dashscope' as a supported provider type (custom adapter)
       if (!supportedProviders.includes('dashscope')) supportedProviders.push('dashscope');
       if (!supportedProviders.includes(options.provider as any)) {

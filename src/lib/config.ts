@@ -152,17 +152,17 @@ async function resolveOAuthCredentials(
   // Check if token is expired and try to refresh
   if (oauth.expires && Date.now() >= oauth.expires) {
     try {
-      const { getOAuthProvider } = await import('@mariozechner/pi-ai/oauth');
+      const { getOAuthProvider } = await import('../oauth-provider.js');
       const oauthProvider = getOAuthProvider(providerConfig.name);
       if (oauthProvider) {
-        const newCredentials = await oauthProvider.refreshToken(oauth as any);
+        const newCredentials = await oauthProvider.refreshToken(oauth);
         providerConfig.oauth = {
           ...oauth,
           refresh: newCredentials.refresh,
           access: newCredentials.access,
           expires: newCredentials.expires,
         };
-        return oauthProvider.getApiKey(providerConfig.oauth as any);
+        return (await oauthProvider.getApiKey(providerConfig.oauth)) ?? providerConfig.oauth.access;
       }
     } catch {
       // Refresh failed, fall through to use existing token
@@ -171,10 +171,10 @@ async function resolveOAuthCredentials(
 
   // Use getApiKey if available
   try {
-    const { getOAuthProvider } = await import('@mariozechner/pi-ai/oauth');
+    const { getOAuthProvider } = await import('../oauth-provider.js');
     const oauthProvider = getOAuthProvider(providerConfig.name);
     if (oauthProvider) {
-      return oauthProvider.getApiKey(oauth as any);
+      return (await oauthProvider.getApiKey(oauth)) ?? (oauth.access as string);
     }
   } catch {
     // Fall back to raw access token

@@ -29,7 +29,7 @@ const packageJson = JSON.parse(
 let piAiVersion = 'unknown';
 try {
   const piAiPkg = JSON.parse(
-    readFileSync(join(__dirname, '../node_modules/@mariozechner/pi-ai/package.json'), 'utf8')
+    readFileSync(join(__dirname, '../node_modules/@earendil-works/pi-ai/package.json'), 'utf8')
   );
   piAiVersion = piAiPkg.version;
 } catch {

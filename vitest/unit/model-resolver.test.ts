@@ -3,7 +3,7 @@ import { validateModelId, getRegistryModels, resolveModel } from '../../src/mode
 import type { ProviderConfig } from '../../src/types.js'
 
 // Mock pi-ai so tests don't need real network
-vi.mock('@mariozechner/pi-ai', () => ({
+vi.mock('@earendil-works/pi-ai/compat', () => ({
   getModels: (provider: string) => {
     if (provider === 'openai') return [{ id: 'gpt-4o' }, { id: 'gpt-4-turbo' }]
     if (provider === 'anthropic') return [{ id: 'claude-3-5-sonnet' }]

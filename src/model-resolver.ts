@@ -1,4 +1,4 @@
-import { getModels } from '@mariozechner/pi-ai';
+import { getModels } from '@earendil-works/pi-ai/compat';
 import type { ProviderConfig } from './types.js';
 
 export interface ResolvedModel {
