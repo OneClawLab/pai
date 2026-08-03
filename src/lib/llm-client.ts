@@ -87,25 +87,25 @@ export class LLMClient {
           break;
 
         case 'done': {
-          const usageData = (event as any).usage;
+          // pi-ai's streaming 'done' event carries the full AssistantMessage on
+          // `event.message` (unlike complete(), which returns the message directly).
+          // usage and content blocks live on that message; `event.reason` is the stop reason.
+          const { usage, content } = event.message;
           const doneResponse: LLMResponse = {
             content: currentContent,
             finishReason: event.reason,
-            ...(usageData ? {
-              usage: {
-                input: usageData.input ?? 0,
-                output: usageData.output ?? 0,
-                ...(usageData.cost ? { cost: { total: usageData.cost.total ?? 0 } } : {}),
-              },
-            } : {}),
+            usage: {
+              input: usage.input,
+              output: usage.output,
+              ...(usage.cost ? { cost: { total: usage.cost.total } } : {}),
+            },
           };
           if (currentToolCalls.length > 0) {
             doneResponse.toolCalls = currentToolCalls;
           }
-          // Preserve pi-ai native content blocks (thinking + signatures) for multi-turn round-trip.
-          const nativeContent = (event as any).message?.content;
-          if (Array.isArray(nativeContent) && nativeContent.length > 0) {
-            doneResponse.providerContent = nativeContent;
+          // Preserve native content blocks (thinking + signatures) for multi-turn round-trip.
+          if (Array.isArray(content) && content.length > 0) {
+            doneResponse.providerContent = content;
           }
           yield doneResponse;
           break;
