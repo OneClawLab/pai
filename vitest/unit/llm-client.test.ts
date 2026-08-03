@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { LLMClient } from '../../src/llm-client.js';
+import { LLMClient } from '../../src/lib/llm-client.js';
 import type { Message, Tool, LLMResponse } from '../../src/types.js';
 
 // Mock pi-ai module
@@ -329,7 +329,11 @@ describe('LLMClient', () => {
         [Symbol.asyncIterator]: async function* () {
           yield { type: 'text_delta', delta: 'Hello' };
           yield { type: 'text_delta', delta: ' world' };
-          yield { type: 'done', reason: 'stop' };
+          yield {
+            type: 'done',
+            reason: 'stop',
+            message: { content: [{ type: 'text', text: 'Hello world' }], usage: { input: 5, output: 2 } },
+          };
         },
       };
       vi.mocked(stream).mockReturnValue(mockStream as any);
@@ -359,7 +363,11 @@ describe('LLMClient', () => {
             type: 'toolcall_end',
             toolCall: { id: 'call_123', name: 'bash_exec', arguments: { command: 'ls' } },
           };
-          yield { type: 'done', reason: 'toolUse' };
+          yield {
+            type: 'done',
+            reason: 'toolUse',
+            message: { content: [], usage: { input: 5, output: 2 } },
+          };
         },
       };
       vi.mocked(stream).mockReturnValue(mockStream as any);
