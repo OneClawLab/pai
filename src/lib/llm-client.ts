@@ -79,6 +79,30 @@ export class LLMClient {
           };
           break;
 
+        case 'thinking_start':
+          yield {
+            content: '',
+            finishReason: 'streaming',
+            thinkingEvent: { type: 'thinking_start' },
+          };
+          break;
+
+        case 'thinking_delta':
+          yield {
+            content: '',
+            finishReason: 'streaming',
+            thinkingEvent: { type: 'thinking_delta', delta: event.delta },
+          };
+          break;
+
+        case 'thinking_end':
+          yield {
+            content: '',
+            finishReason: 'streaming',
+            thinkingEvent: { type: 'thinking_end', thinking: event.content },
+          };
+          break;
+
         case 'toolcall_end':
           currentToolCalls.push({
             id: event.toolCall.id,
@@ -346,15 +370,21 @@ export class LLMClient {
     // Reasoning models on the OpenAI/Azure Responses API run with store:false, so a
     // multi-turn tool call must replay the reasoning item's encrypted_content inline
     // (sending only the rs_ id fails: the item was never persisted server-side).
-    // pi-ai only requests include:["reasoning.encrypted_content"] when a reasoning
-    // effort (or summary) is set. Default an effort for reasoning models so they work
-    // across turns out of the box; callers can still override via providerOptions.
-    if (
-      this.config.reasoning &&
-      options.reasoningEffort === undefined &&
-      options.reasoningSummary === undefined
-    ) {
-      options.reasoningEffort = 'medium';
+    // Responses API 同时显式请求 detailed summary，尽量获得可展示的推理摘要；
+    // encrypted_content 仍只用于续轮，不作为可见文本。providerOptions 可覆盖或以 null 关闭。
+    if (this.config.reasoning) {
+      if (
+        options.reasoningEffort === undefined &&
+        options.reasoningSummary === undefined
+      ) {
+        options.reasoningEffort = 'medium';
+      }
+      if (
+        options.reasoningSummary === undefined &&
+        (this.model.api === 'openai-responses' || this.model.api === 'azure-openai-responses')
+      ) {
+        options.reasoningSummary = 'detailed';
+      }
     }
 
     return options;

@@ -90,8 +90,10 @@ export async function* chat(
         let providerContent: unknown;
 
         for await (const response of llmClient.chat(messagesForCall, tools, signal)) {
-          if (response.finishReason === 'streaming') {
-            // Streaming chunk
+          if (response.thinkingEvent) {
+            yield response.thinkingEvent;
+          } else if (response.finishReason === 'streaming') {
+            // Streaming text chunk
             if (response.content && chunkWriter !== null) {
               chunkWriter.write(response.content);
             }

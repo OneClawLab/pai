@@ -136,6 +136,11 @@ export interface LLMResponse {
     output: number;
     cost?: { total: number };
   };
+  /** 流式推理进度；正文仍通过 content/chunkWriter 传递。 */
+  thinkingEvent?:
+    | { type: 'thinking_start' }
+    | { type: 'thinking_delta'; delta: string }
+    | { type: 'thinking_end'; thinking: string };
   /** pi-ai native content blocks from the completed turn (text/thinking/toolCall + signatures). */
   providerContent?: unknown;
 }
