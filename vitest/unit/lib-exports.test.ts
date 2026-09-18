@@ -22,6 +22,19 @@ describe('src/index.ts - LIB exports', () => {
     expect(typeof ImageClient).toBe('function')
   })
 
+  it('should export nativeToolResult and its public types', async () => {
+    const { nativeToolResult } = await import('../../src/index.js')
+    const result: import('../../src/index.js').NativeToolResult = nativeToolResult({
+      content: [{ type: 'text', text: 'rendered' }],
+      result: { artifactId: 'artifact-1' },
+    })
+    const block: import('../../src/index.js').ToolResultContentBlock = result.content[0]!
+
+    expect(typeof nativeToolResult).toBe('function')
+    expect(result.type).toBe('native_tool_result')
+    expect(block).toEqual({ type: 'text', text: 'rendered' })
+  })
+
   it('should NOT export chat, loadConfig, resolveProvider (now internal)', async () => {
     const module = await import('../../src/index.js') as Record<string, unknown>
     expect(module['chat']).toBeUndefined()

@@ -41,7 +41,8 @@ vi.mock('../../src/lib/llm-client.js', () => {
 })
 
 import { chat } from '../../src/lib/chat.js'
-import type { ChatConfig, ChatHooks, Tool } from '../../src/lib/types.js'
+import { nativeToolResult } from '../../src/lib/types.js'
+import type { ChatConfig, ChatEvent, ChatHooks, Tool, ToolResultContentBlock } from '../../src/lib/types.js'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -154,5 +155,84 @@ describe('chat() - onBeforeNextTurn hook', () => {
 
     expect(events[0]).toBe('start')
     expect(events[events.length - 1]).toBe('chat_end')
+  })
+})
+
+describe('chat() - native tool results', () => {
+  beforeEach(() => {
+    _mock = makeTwoTurnMock()
+  })
+
+  it('preserves JSON.stringify behavior for ordinary tool results', async () => {
+    const events: ChatEvent[] = []
+    for await (const event of chat({ userMessage: 'hi' }, config, null, [noopTool], signal)) {
+      events.push(event)
+    }
+
+    const resultEvent = events.find(event => event.type === 'tool_result')
+    expect(resultEvent).toEqual({
+      type: 'tool_result',
+      callId: 'tc-1',
+      name: 'noop',
+      result: { ok: true },
+    })
+
+    const secondCallMessages = _mock.chatComplete.mock.calls[1]?.[0] as Message[]
+    const toolMessage = secondCallMessages.find(message => message.role === 'tool')
+    expect(toolMessage?.content).toBe('{"ok":true}')
+    expect(toolMessage?.result).toBeUndefined()
+    expect(toolMessage?.isError).toBeUndefined()
+  })
+
+  it('keeps native blocks and exposes only the durable result in events', async () => {
+    const content: ToolResultContentBlock[] = [
+      { type: 'text', text: '{"artifactId":"artifact-1"}' },
+      { type: 'image', data: 'base64-png', mimeType: 'image/png' },
+    ]
+    const durableResult = { artifactId: 'artifact-1' }
+    const tool: Tool = {
+      ...noopTool,
+      handler: async () => nativeToolResult({ content, result: durableResult, isError: true }),
+    }
+    const events: ChatEvent[] = []
+
+    for await (const event of chat({ userMessage: 'hi' }, config, null, [tool], signal)) {
+      events.push(event)
+    }
+
+    const resultEvent = events.find(event => event.type === 'tool_result')
+    expect(resultEvent).toEqual({
+      type: 'tool_result',
+      callId: 'tc-1',
+      name: 'noop',
+      result: durableResult,
+    })
+
+    const secondCallMessages = _mock.chatComplete.mock.calls[1]?.[0] as Message[]
+    const toolMessage = secondCallMessages.find(message => message.role === 'tool')
+    expect(toolMessage?.content).toEqual(content)
+    expect(toolMessage?.result).toEqual(durableResult)
+    expect(toolMessage?.isError).toBe(true)
+  })
+
+  it('does not mistake an ordinary lookalike object for a native result', async () => {
+    const lookalike = {
+      type: 'native_tool_result',
+      content: [{ type: 'image', data: 'not-native', mimeType: 'image/png' }],
+      result: { durable: true },
+      isError: true,
+    }
+    const tool: Tool = { ...noopTool, handler: async () => lookalike }
+    const events: ChatEvent[] = []
+
+    for await (const event of chat({ userMessage: 'hi' }, config, null, [tool], signal)) {
+      events.push(event)
+    }
+
+    expect(events.find(event => event.type === 'tool_result')).toMatchObject({ result: lookalike })
+    const secondCallMessages = _mock.chatComplete.mock.calls[1]?.[0] as Message[]
+    const toolMessage = secondCallMessages.find(message => message.role === 'tool')
+    expect(toolMessage?.content).toBe(JSON.stringify(lookalike))
+    expect(toolMessage?.isError).toBeUndefined()
   })
 })

@@ -244,8 +244,10 @@ export class LLMClient {
           role: 'toolResult' as const,
           toolCallId: msg.tool_call_id!,
           toolName: msg.name || '',
-          content: [{ type: 'text' as const, text: String(msg.content) }],
-          isError: false,
+          content: Array.isArray(msg.content) && typeof msg.isError === 'boolean'
+            ? msg.content
+            : [{ type: 'text' as const, text: String(msg.content) }],
+          isError: msg.isError ?? false,
           timestamp: Date.now(),
         };
       }

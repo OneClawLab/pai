@@ -1,6 +1,6 @@
 import type { Writable } from 'node:stream';
 import type { ChatInput, ChatConfig, ChatEvent, Message, Tool, ChatHooks } from './types.js';
-import { PAIError, ExitCode } from './types.js';
+import { PAIError, ExitCode, isNativeToolResult } from './types.js';
 import { LLMClient } from './llm-client.js';
 
 const DEFAULT_MAX_TURNS = 100;
@@ -172,19 +172,30 @@ export async function* chat(
             result = { error: err instanceof Error ? err.message : String(err) };
           }
 
+          const nativeResult = isNativeToolResult(result) ? result : undefined;
+
           yield {
             type: 'tool_result',
             callId: toolCall.id,
             name: toolCall.name,
-            result,
+            result: nativeResult ? nativeResult.result : result,
           };
 
-          const toolResultMessage: Message = {
-            role: 'tool',
-            name: toolCall.name,
-            tool_call_id: toolCall.id,
-            content: JSON.stringify(result),
-          };
+          const toolResultMessage: Message = nativeResult
+            ? {
+                role: 'tool',
+                name: toolCall.name,
+                tool_call_id: toolCall.id,
+                content: nativeResult.content,
+                result: nativeResult.result,
+                isError: nativeResult.isError ?? false,
+              }
+            : {
+                role: 'tool',
+                name: toolCall.name,
+                tool_call_id: toolCall.id,
+                content: JSON.stringify(result),
+              };
           messages.push(toolResultMessage);
           newMessages.push(toolResultMessage);
         }

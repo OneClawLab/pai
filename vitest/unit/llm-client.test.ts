@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { LLMClient } from '../../src/lib/llm-client.js';
-import type { Message, Tool, LLMResponse } from '../../src/types.js';
+import type { Message, Tool, LLMResponse } from '../../src/lib/types.js';
 
 // Mock pi-ai module
 vi.mock('../../src/pi-ai.js', () => ({
@@ -234,6 +234,49 @@ describe('LLMClient', () => {
       expect(toolResultMsg).toBeDefined();
       expect(toolResultMsg.toolCallId).toBe('call_1');
       expect(toolResultMsg.toolName).toBe('bash_exec');
+      expect(toolResultMsg.content).toEqual([
+        { type: 'text', text: '{"stdout":"file.txt","stderr":"","exitCode":0}' },
+      ]);
+      expect(toolResultMsg.isError).toBe(false);
+    });
+
+    it('should pass native tool result blocks and isError to pi-ai', async () => {
+      const { complete } = await import('../../src/pi-ai.js');
+      vi.mocked(complete).mockResolvedValue({
+        role: 'assistant',
+        content: [{ type: 'text', text: 'OK' }],
+        stopReason: 'stop',
+        usage: { input: 10, output: 5, cost: { total: 0 } },
+        timestamp: Date.now(),
+      } as any);
+
+      const content = [
+        { type: 'text' as const, text: '{"artifactId":"artifact-1"}' },
+        { type: 'image' as const, data: 'base64-png', mimeType: 'image/png' },
+      ];
+      const messages: Message[] = [
+        { role: 'user', content: 'Render the artifact' },
+        {
+          role: 'assistant',
+          content: '',
+          tool_calls: [{ id: 'call_render', name: 'render', arguments: {} }],
+        } as any,
+        {
+          role: 'tool',
+          name: 'render',
+          tool_call_id: 'call_render',
+          content,
+          result: { artifactId: 'artifact-1' },
+          isError: true,
+        },
+      ];
+
+      await client.chatComplete(messages);
+
+      const context = vi.mocked(complete).mock.calls[0]?.[1] as any;
+      const toolResultMsg = context.messages.find((message: any) => message.role === 'toolResult');
+      expect(toolResultMsg.content).toEqual(content);
+      expect(toolResultMsg.isError).toBe(true);
     });
 
     it('should convert assistant messages with tool_calls to content blocks', async () => {

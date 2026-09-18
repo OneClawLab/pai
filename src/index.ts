@@ -24,7 +24,7 @@ export type { PathPolicy, PathPolicyRule, PathAccess, FileOp } from './tools/bas
 export { createFileWriteTool } from './tools/file-write.js';
 export type { FileWriteArgs, FileWriteResult } from './tools/file-write.js';
 export { initPai } from './lib/pai-instance.js';
-export { defineTool } from './lib/types.js';
+export { defineTool, nativeToolResult } from './lib/types.js';
 export { ImageClient } from './image-client.js';
 export type { ImageClientConfig, ImageGenerationRequest, ImageEditRequest, ImageGenerationResponse, GeneratedImage } from './image-client.js';
 export type { Pai, ChatOptions as PaiChatOptions, ProviderInfo } from './lib/pai-instance.js';
@@ -34,6 +34,8 @@ export type {
   ChatHooks,
   Message,
   MessageContent,
+  NativeToolResult,
+  ToolResultContentBlock,
   Tool,
   Usage,
 } from './lib/types.js';

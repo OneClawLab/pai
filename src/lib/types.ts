@@ -53,6 +53,10 @@ export interface PAIConfig {
 
 export type MessageRole = 'system' | 'user' | 'assistant' | 'tool';
 
+export type ToolResultContentBlock =
+  | { type: 'text'; text: string }
+  | { type: 'image'; data: string; mimeType: string };
+
 export type MessageContent = string | object | unknown[];
 
 export interface Message {
@@ -60,6 +64,10 @@ export interface Message {
   content: MessageContent;
   name?: string; // For tool messages
   tool_call_id?: string; // For tool responses
+  /** Durable result associated with native tool content. */
+  result?: unknown;
+  /** Whether a native tool result represents an error. */
+  isError?: boolean;
   timestamp?: string | null; // ISO8601 timestamp
   id?: string; // Optional message ID
   /**
@@ -75,6 +83,37 @@ export interface Message {
 // ============================================================================
 // Tool Types
 // ============================================================================
+
+const nativeToolResultBrand: unique symbol = Symbol('pai.nativeToolResult');
+
+/** Tool result content passed directly to pi-ai. */
+export type NativeToolResultInput = {
+  content: ToolResultContentBlock[];
+  result: unknown;
+  isError?: boolean;
+};
+
+/** Branded envelope for native multimodal tool results. */
+export interface NativeToolResult extends NativeToolResultInput {
+  readonly type: 'native_tool_result';
+  readonly [nativeToolResultBrand]: true;
+}
+
+/** Creates a native tool result without changing the return contract of Tool.handler. */
+export function nativeToolResult(input: NativeToolResultInput): NativeToolResult {
+  return {
+    ...input,
+    type: 'native_tool_result',
+    [nativeToolResultBrand]: true,
+  };
+}
+
+/** Internal runtime guard; the private symbol prevents collisions with ordinary objects. */
+export function isNativeToolResult(value: unknown): value is NativeToolResult {
+  return typeof value === 'object'
+    && value !== null
+    && (value as NativeToolResult)[nativeToolResultBrand] === true;
+}
 
 export interface Tool {
   name: string;

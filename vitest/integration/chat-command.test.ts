@@ -681,6 +681,7 @@ describe('Integration Tests', () => {
         const toolResult = messages.find((m: any) => m.role === 'toolResult');
         expect(toolResult).toBeDefined();
         expect(toolResult.content[0].text).toContain('Error');
+        expect(toolResult.isError).toBe(false);
 
         return {
           role: 'assistant',
