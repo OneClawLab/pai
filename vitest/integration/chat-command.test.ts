@@ -29,7 +29,7 @@ vi.mock('../../src/pi-ai.js', () => ({
     })
   ),
   getProviders: vi.fn(() => ['openai', 'anthropic', 'google']),
-  getModels: vi.fn(() => [{ id: 'model-1' }, { id: 'model-2' }]),
+  getModels: vi.fn(() => [{ id: 'test-model' }]),
 }));
 
 describe('Integration Tests', () => {

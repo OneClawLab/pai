@@ -14,11 +14,11 @@
 import { builtinProviders } from '@earendil-works/pi-ai/providers/all';
 import type {
   AuthEvent,
-  AuthInteraction,
   AuthPrompt,
   ModelAuth,
   OAuthCredential,
   Provider,
+  ProviderAuthInteraction,
 } from '@earendil-works/pi-ai';
 
 /** Stored OAuth credential shape used by pai config (no `type` discriminator). */
@@ -62,9 +62,10 @@ function fromOAuthCredential(cred: OAuthCredential): OAuthCredentials {
   return rest as OAuthCredentials;
 }
 
-/** Bridge pai's old login callbacks to pi-ai's `AuthInteraction`. */
-function buildInteraction(callbacks: OAuthLoginCallbacks): AuthInteraction {
+/** Bridge pai's old login callbacks to pi-ai's `ProviderAuthInteraction`. */
+function buildInteraction(callbacks: OAuthLoginCallbacks): ProviderAuthInteraction {
   return {
+    signal: new AbortController().signal,
     async prompt(prompt: AuthPrompt): Promise<string> {
       if (!callbacks.onPrompt) {
         throw new Error(`OAuth login requires an interactive prompt: ${prompt.message}`);
@@ -122,7 +123,7 @@ export function getOAuthProvider(providerId: string): OAuthProviderCompat | unde
       return fromOAuthCredential(cred);
     },
     async refreshToken(credentials) {
-      const cred = await oauth.refresh(toOAuthCredential(credentials));
+      const cred = await oauth.refresh(toOAuthCredential(credentials), new AbortController().signal);
       return fromOAuthCredential(cred);
     },
     async getApiKey(credentials) {
