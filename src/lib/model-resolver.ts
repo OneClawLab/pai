@@ -79,17 +79,21 @@ export function getRegistryModels(providerName: string): string[] {
 }
 
 /**
- * Validate that a model id exists in the provider's configured models list
- * or in the pi-ai registry. Returns a warning string if invalid, null if ok.
+ * Validate that a model id is usable for the provider.
+ * Returns a user-facing error message if invalid, or null when it is valid.
  */
 export function validateModelId(
   modelId: string,
   provider: ProviderConfig
 ): string | null {
+  // Custom API providers can use deployment-specific model ids that are not
+  // present in pi-ai's built-in registry.
+  if (provider.api) return null;
+
   // Check configured models list first
   if (provider.models && provider.models.length > 0) {
     if (!provider.models.includes(modelId)) {
-      return `Model "${modelId}" is not in the configured models list for provider "${provider.name}": [${provider.models.join(', ')}]`;
+      return `Unsupported model "${modelId}" for provider "${provider.name}". Configured models: [${provider.models.join(', ')}]`;
     }
     return null;
   }
@@ -97,7 +101,7 @@ export function validateModelId(
   // Fall back to registry check
   const registryModels = getRegistryModels(provider.name);
   if (registryModels.length > 0 && !registryModels.includes(modelId)) {
-    return `Model "${modelId}" is not in the known models for provider "${provider.name}" (registry). Known: [${registryModels.join(', ')}]`;
+    return `Unsupported model "${modelId}" for provider "${provider.name}". Available models: [${registryModels.join(', ')}]`;
   }
 
   return null;

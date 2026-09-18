@@ -8,7 +8,7 @@ import { SessionManager } from '../session-manager.js';
 import { InputResolver } from '../input-resolver.js';
 import { OutputFormatter } from '../output-formatter.js';
 import { ToolRegistry } from '../tool-registry.js';
-import { resolveModel } from '../lib/model-resolver.js';
+import { resolveModel, validateModelId } from '../lib/model-resolver.js';
 
 /**
  * Handle the chat command
@@ -87,6 +87,15 @@ export async function handleChatCommand(
         'No model specified',
         2,
         { provider: provider.name, message: 'Specify --model or configure a default model' }
+      );
+    }
+
+    const modelValidationError = validateModelId(modelName, provider);
+    if (modelValidationError) {
+      throw new PAIError(
+        modelValidationError,
+        2,
+        { provider: provider.name, model: modelName }
       );
     }
 
